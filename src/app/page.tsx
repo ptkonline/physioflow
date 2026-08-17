@@ -1,68 +1,99 @@
-import Image from "next/image";
+import { Logo } from "@/components/Logo";
+import { ShieldCheck, StretchHorizontal, Video, LineChart } from "lucide-react";
+import Link from "next/link";
 
-export default function Home() {
+const features = [
+  {
+    icon: StretchHorizontal,
+    title: "Guided programs",
+    text: "Clinicians assign clear, video-backed exercises matched to your condition.",
+  },
+  {
+    icon: Video,
+    title: "Video visits",
+    text: "Join a private consultation from home with large, simple controls.",
+  },
+  {
+    icon: LineChart,
+    title: "Progress you can see",
+    text: "Track completions, pain levels, and how each exercise felt.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Private by design",
+    text: "HIPAA- and GDPR-minded consent, audit logs, and data export or deletion.",
+  },
+];
+
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
+        <Logo className="text-xl" />
+        <div className="flex gap-2">
+          <Link href="/login" className="btn btn-ghost">
+            Sign in
+          </Link>
+          <Link href="/register" className="btn btn-primary">
+            Get started
+          </Link>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+      </header>
+      <main className="mx-auto max-w-6xl px-4 pb-20">
+        <section className="grid items-center gap-10 py-10 lg:grid-cols-2">
+          <div className="space-y-5">
+            <p className="chip">For patients and physiotherapists</p>
+            <h1 className="max-w-xl text-4xl font-semibold leading-tight md:text-5xl">
+              Recover at home with a plan you can follow.
+            </h1>
+            <p className="max-w-lg text-lg text-muted">
+              PhysioFlow is a calm space for exercise programs, video visits, and recovery tracking — designed to be easy to read and easy to tap.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/register" className="btn btn-primary">
+                Create a free account
+              </Link>
+              <Link href="/login" className="btn btn-ghost">
+                Try the demo
+              </Link>
+            </div>
+          </div>
+          <div className="card overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://images.pexels.com/photos/8436586/pexels-photo-8436586.jpeg?auto=compress&cs=tinysrgb&w=1200"
+              alt="Person stretching during a physiotherapy session"
+              className="h-80 w-full object-cover"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            <div className="grid grid-cols-3 gap-3 p-5 text-center">
+              <div>
+                <p className="text-2xl font-semibold">12</p>
+                <p className="text-sm text-muted">Video exercises</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold">2</p>
+                <p className="text-sm text-muted">Demo roles</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold">0–10</p>
+                <p className="text-sm text-muted">Pain scale</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {features.map((f) => (
+            <article key={f.title} className="card p-5">
+              <f.icon className="text-teal" />
+              <h2 className="mt-3 text-lg font-semibold">{f.title}</h2>
+              <p className="mt-1 text-muted">{f.text}</p>
+            </article>
+          ))}
+        </section>
+        <p className="mt-10 text-center text-sm text-muted">
+          Demo accounts: <strong>maya@demo.physio</strong> (patient) and{" "}
+          <strong>james@demo.physio</strong> (clinician), password <strong>demo123</strong>.
+        </p>
       </main>
     </div>
   );
