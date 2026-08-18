@@ -1,6 +1,7 @@
 "use client";
 
 import { Logo } from "@/components/Logo";
+import { homePath } from "@/lib/paths";
 import { useCurrentUser, useStore } from "@/lib/store";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -18,7 +19,7 @@ function LoginForm() {
   useEffect(() => {
     if (!user) return;
     const next = params.get("next");
-    router.replace(next || (user.role === "physio" ? "/physio" : "/patient"));
+    router.replace(next || homePath(user.role));
   }, [user, router, params]);
 
   function onSubmit(e: FormEvent) {
@@ -54,6 +55,9 @@ function LoginForm() {
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => { setEmail("james@demo.physio"); setPassword("demo123"); }}>
               Clinician demo
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => { setEmail("priya@demo.physio"); setPassword("demo123"); }}>
+              Front desk demo
             </button>
           </div>
         </form>

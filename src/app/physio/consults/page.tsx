@@ -12,7 +12,12 @@ export default function PhysioConsults() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-3xl font-semibold">Consultations</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-semibold">Consultations</h1>
+        <Link href="/physio/bookings/new" className="btn btn-primary">
+          New booking
+        </Link>
+      </div>
       <ul className="space-y-3">
         {calls.map((c) => {
           const patient = state.users.find((u) => u.id === c.patientId);

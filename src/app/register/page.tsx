@@ -2,6 +2,7 @@
 
 import { Logo } from "@/components/Logo";
 import { CONDITIONS, GOALS } from "@/lib/seed";
+import { homePath } from "@/lib/paths";
 import { useStore } from "@/lib/store";
 import type { Condition, Role } from "@/lib/types";
 import Link from "next/link";
@@ -32,7 +33,7 @@ export default function RegisterPage() {
       setError("That email is already in use.");
       return;
     }
-    router.replace(role === "physio" ? "/physio" : "/patient");
+    router.replace(homePath(role));
   }
 
   return (
@@ -43,15 +44,15 @@ export default function RegisterPage() {
       <form onSubmit={onSubmit} className="card mt-6 space-y-4 p-6">
         <h1 className="text-2xl font-semibold">Create your account</h1>
         <p className="text-muted">Tell us who you are. You can change details later.</p>
-        <div className="grid grid-cols-2 gap-2">
-          {(["patient", "physio"] as Role[]).map((r) => (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {(["patient", "physio", "staff"] as Role[]).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRole(r)}
               className={`btn ${role === r ? "btn-primary" : "btn-ghost"}`}
             >
-              {r === "patient" ? "I am a patient" : "I am a clinician"}
+              {r === "patient" ? "Patient" : r === "physio" ? "Doctor" : "Front desk"}
             </button>
           ))}
         </div>

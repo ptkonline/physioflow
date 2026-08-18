@@ -15,8 +15,10 @@ import { seedState } from "./seed";
 import type {
   AppNotification,
   AppState,
+  Booking,
   Condition,
   Consult,
+  DoctorProfile,
   Exercise,
   PatientProfile,
   Program,
@@ -24,7 +26,7 @@ import type {
   Role,
 } from "./types";
 
-const STORAGE_KEY = "physioflow.v1";
+const STORAGE_KEY = "physioflow.v2";
 
 type Action =
   | { type: "hydrate"; state: AppState }
@@ -52,6 +54,29 @@ type Action =
     }
   | { type: "logPain"; patientId: string; level: number; note: string }
   | { type: "scheduleConsult"; consult: Omit<Consult, "id" | "status"> }
+  | {
+      type: "createBooking";
+      createdById: string;
+      physioId: string;
+      patientName: string;
+      patientEmail: string;
+      patientPhone: string;
+      scheduledAt: string;
+      durationMin: number;
+      reason: string;
+      notes: string;
+      condition?: Condition;
+    }
+  | {
+      type: "addDoctor";
+      name: string;
+      email: string;
+      password: string;
+      clinicId: string;
+      specialty: string;
+      phone: string;
+      bio: string;
+    }
   | { type: "setConsultStatus"; id: string; status: Consult["status"] }
   | { type: "markNotificationsRead"; userId: string }
   | { type: "addNotification"; notification: Omit<AppNotification, "id" | "createdAt" | "read"> }
@@ -63,10 +88,21 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function normalizeState(incoming: AppState): AppState {
+  return {
+    ...seedState,
+    ...incoming,
+    doctors: incoming.doctors ?? seedState.doctors,
+    bookings: incoming.bookings ?? seedState.bookings,
+    consults: incoming.consults ?? seedState.consults,
+    users: incoming.users ?? seedState.users,
+  };
+}
+
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "hydrate":
-      return action.state;
+      return normalizeState(action.state);
     case "login": {
       const user = state.users.find(
         (u) =>
@@ -117,7 +153,10 @@ function reducer(state: AppState, action: Action): AppState {
                 diagnosis: "Pending clinician review",
                 painBaseline: 4,
                 dateOfBirth: "",
-                assignedPhysioId: "physio-james",
+                assignedPhysioId:
+                  state.doctors[0]?.userId ??
+                  state.users.find((u) => u.role === "physio")?.id ??
+                  "physio-james",
               },
             ]
           : state.profiles;
@@ -266,11 +305,179 @@ function reducer(state: AppState, action: Action): AppState {
         ],
       };
     }
+    case "createBooking": {
+      const email = action.patientEmail.trim().toLowerCase();
+      const doctor = state.users.find((u) => u.id === action.physioId && u.role === "physio");
+      if (!doctor) return state;
+      const existing = state.users.find((u) => u.email.toLowerCase() === email);
+      if (existing && existing.role !== "patient") return state;
+
+      let patientId = existing?.id;
+      let users = state.users;
+      let profiles = state.profiles;
+      if (!patientId) {
+        patientId = uid("patient");
+        users = [
+          ...users,
+          {
+            id: patientId,
+            name: action.patientName.trim(),
+            email,
+            password: "demo123",
+            role: "patient",
+            phone: action.patientPhone,
+            consentHipaa: true,
+            consentGdpr: true,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+        profiles = [
+          ...profiles,
+          {
+            userId: patientId,
+            condition: action.condition ?? "back",
+            goal: "Improve daily mobility",
+            diagnosis: action.reason,
+            painBaseline: 4,
+            dateOfBirth: "",
+            assignedPhysioId: action.physioId,
+            phone: action.patientPhone,
+          },
+        ];
+      } else {
+        profiles = profiles.map((p) =>
+          p.userId === patientId ? { ...p, assignedPhysioId: action.physioId, phone: action.patientPhone } : p,
+        );
+        users = users.map((u) => (u.id === patientId ? { ...u, phone: action.patientPhone, name: action.patientName.trim() } : u));
+      }
+
+      const consultId = uid("call");
+      const bookingId = uid("book");
+      const consult: Consult = {
+        id: consultId,
+        patientId,
+        physioId: action.physioId,
+        scheduledAt: action.scheduledAt,
+        durationMin: action.durationMin,
+        status: "upcoming",
+        topic: action.reason,
+      };
+      const booking: Booking = {
+        id: bookingId,
+        consultId,
+        patientId,
+        physioId: action.physioId,
+        createdById: action.createdById,
+        patientName: action.patientName.trim(),
+        patientEmail: email,
+        patientPhone: action.patientPhone,
+        scheduledAt: action.scheduledAt,
+        durationMin: action.durationMin,
+        reason: action.reason,
+        notes: action.notes,
+        status: "upcoming",
+        createdAt: new Date().toISOString(),
+      };
+      const clinicId = state.doctors.find((d) => d.userId === action.physioId)?.clinicId ?? action.physioId;
+      return {
+        ...state,
+        users,
+        profiles,
+        consults: [...state.consults, consult],
+        bookings: [...(state.bookings ?? []), booking],
+        notifications: [
+          ...state.notifications,
+          {
+            id: uid("n"),
+            userId: action.physioId,
+            title: "New booking on your list",
+            body: `${action.patientName} · ${action.reason} · ${clinicId}`,
+            type: "consult",
+            read: false,
+            createdAt: new Date().toISOString(),
+            href: "/physio/bookings",
+          },
+          {
+            id: uid("n"),
+            userId: patientId,
+            title: "Your appointment is booked",
+            body: `${doctor.name} · ${action.reason}`,
+            type: "consult",
+            read: false,
+            createdAt: new Date().toISOString(),
+            href: `/consult/${consultId}`,
+          },
+        ],
+        audit: [
+          ...state.audit,
+          {
+            id: uid("audit"),
+            at: new Date().toISOString(),
+            actorId: action.createdById,
+            action: "create_booking",
+            detail: `Booked ${action.patientName} with ${doctor.name} (${clinicId})`,
+          },
+        ],
+      };
+    }
+    case "addDoctor": {
+      if (state.users.some((u) => u.email.toLowerCase() === action.email.toLowerCase())) {
+        return state;
+      }
+      const userId = uid("physio");
+      const clinicId =
+        action.clinicId.trim() ||
+        `DOC-${String(1000 + state.doctors.length + 1).padStart(4, "0")}`;
+      const user = {
+        id: userId,
+        name: action.name.trim(),
+        email: action.email.trim().toLowerCase(),
+        password: action.password,
+        role: "physio" as const,
+        phone: action.phone,
+        consentHipaa: true,
+        consentGdpr: true,
+        createdAt: new Date().toISOString(),
+      };
+      const doctor: DoctorProfile = {
+        userId,
+        clinicId,
+        specialty: action.specialty,
+        phone: action.phone,
+        bio: action.bio,
+      };
+      return {
+        ...state,
+        users: [...state.users, user],
+        doctors: [...(state.doctors ?? []), doctor],
+        notifications: [
+          ...state.notifications,
+          {
+            id: uid("n"),
+            userId,
+            title: "Your clinic ID is ready",
+            body: `Sign in with ${user.email}. Bookings for ${clinicId} appear here automatically.`,
+            type: "system",
+            read: false,
+            createdAt: new Date().toISOString(),
+            href: "/physio/bookings",
+          },
+        ],
+      };
+    }
     case "setConsultStatus":
       return {
         ...state,
         consults: state.consults.map((c) =>
           c.id === action.id ? { ...c, status: action.status } : c,
+        ),
+        bookings: (state.bookings ?? []).map((b) =>
+          b.consultId === action.id
+            ? {
+                ...b,
+                status: action.status === "live" ? "upcoming" : action.status,
+              }
+            : b,
         ),
       };
     case "markNotificationsRead": {
@@ -323,6 +530,8 @@ function reducer(state: AppState, action: Action): AppState {
         completions: state.completions.filter((c) => c.patientId !== id),
         painLogs: state.painLogs.filter((p) => p.patientId !== id),
         consults: state.consults.filter((c) => c.patientId !== id && c.physioId !== id),
+        bookings: (state.bookings ?? []).filter((b) => b.patientId !== id && b.physioId !== id && b.createdById !== id),
+        doctors: (state.doctors ?? []).filter((d) => d.userId !== id),
         notifications: state.notifications.filter((n) => n.userId !== id),
       };
     }
@@ -361,6 +570,27 @@ interface StoreValue {
   }) => void;
   logPain: (patientId: string, level: number, note: string) => void;
   scheduleConsult: (consult: Omit<Consult, "id" | "status">) => void;
+  createBooking: (input: {
+    createdById: string;
+    physioId: string;
+    patientName: string;
+    patientEmail: string;
+    patientPhone: string;
+    scheduledAt: string;
+    durationMin: number;
+    reason: string;
+    notes: string;
+    condition?: Condition;
+  }) => boolean;
+  addDoctor: (input: {
+    name: string;
+    email: string;
+    password: string;
+    clinicId: string;
+    specialty: string;
+    phone: string;
+    bio: string;
+  }) => boolean;
   setConsultStatus: (id: string, status: Consult["status"]) => void;
   markNotificationsRead: (userId: string) => void;
   addNotification: (n: Omit<AppNotification, "id" | "createdAt" | "read">) => void;
@@ -402,6 +632,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     encryptJson(state).then((vault) => localStorage.setItem(STORAGE_KEY, vault));
   }, [hydrated, state]);
+
+  useEffect(() => {
+    function onStorage(event: StorageEvent) {
+      if (event.key !== STORAGE_KEY || !event.newValue) return;
+      const raw = event.newValue;
+      void (async () => {
+        try {
+          const parsed = raw.startsWith("{")
+            ? (JSON.parse(raw) as AppState)
+            : await decryptJson<AppState>(raw);
+          dispatch({ type: "hydrate", state: parsed });
+        } catch {
+          /* ignore malformed peer writes */
+        }
+      })();
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const login = useCallback((email: string, password: string) => {
     const found = state.users.find(
@@ -457,6 +706,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (consult: Omit<Consult, "id" | "status">) => dispatch({ type: "scheduleConsult", consult }),
     [],
   );
+  const createBooking = useCallback(
+    (input: Parameters<StoreValue["createBooking"]>[0]) => {
+      const doctor = state.users.find((u) => u.id === input.physioId && u.role === "physio");
+      const clash = state.users.find(
+        (u) => u.email.toLowerCase() === input.patientEmail.trim().toLowerCase() && u.role !== "patient",
+      );
+      if (!doctor || clash) return false;
+      dispatch({ type: "createBooking", ...input });
+      return true;
+    },
+    [state.users],
+  );
+  const addDoctor = useCallback((input: Parameters<StoreValue["addDoctor"]>[0]) => {
+    if (state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
+      return false;
+    }
+    dispatch({ type: "addDoctor", ...input });
+    return true;
+  }, [state.users]);
   const setConsultStatus = useCallback(
     (id: string, status: Consult["status"]) => dispatch({ type: "setConsultStatus", id, status }),
     [],
@@ -500,6 +768,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       completeExercise,
       logPain,
       scheduleConsult,
+      createBooking,
+      addDoctor,
       setConsultStatus,
       markNotificationsRead,
       addNotification,
@@ -514,6 +784,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       assignProgram,
       audit,
       completeExercise,
+      createBooking,
+      addDoctor,
       deleteAccount,
       hydrated,
       login,

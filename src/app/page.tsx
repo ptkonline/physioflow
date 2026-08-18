@@ -91,8 +91,9 @@ export default function HomePage() {
           ))}
         </section>
         <p className="mt-10 text-center text-sm text-muted">
-          Demo accounts: <strong>maya@demo.physio</strong> (patient) and{" "}
-          <strong>james@demo.physio</strong> (clinician), password <strong>demo123</strong>.
+          Demo: <strong>priya@demo.physio</strong> (front desk),{" "}
+          <strong>james@demo.physio</strong> / <strong>aisha@demo.physio</strong> (doctors),{" "}
+          <strong>maya@demo.physio</strong> (patient). Password <strong>demo123</strong>.
         </p>
       </main>
     </div>

@@ -1,4 +1,4 @@
-export type Role = "patient" | "physio";
+export type Role = "patient" | "physio" | "staff";
 
 export type Condition =
   | "knee"
@@ -16,6 +16,7 @@ export interface User {
   email: string;
   password: string;
   role: Role;
+  phone?: string;
   consentHipaa: boolean;
   consentGdpr: boolean;
   createdAt: string;
@@ -29,6 +30,32 @@ export interface PatientProfile {
   painBaseline: number;
   dateOfBirth: string;
   assignedPhysioId: string;
+  phone?: string;
+}
+
+export interface DoctorProfile {
+  userId: string;
+  clinicId: string;
+  specialty: string;
+  phone: string;
+  bio: string;
+}
+
+export interface Booking {
+  id: string;
+  consultId: string;
+  patientId: string;
+  physioId: string;
+  createdById: string;
+  patientName: string;
+  patientEmail: string;
+  patientPhone: string;
+  scheduledAt: string;
+  durationMin: number;
+  reason: string;
+  notes: string;
+  status: "upcoming" | "completed" | "cancelled";
+  createdAt: string;
 }
 
 export interface Exercise {
@@ -118,6 +145,8 @@ export interface AppState {
   completions: CompletionLog[];
   painLogs: PainLog[];
   consults: Consult[];
+  bookings: Booking[];
+  doctors: DoctorProfile[];
   notifications: AppNotification[];
   audit: AuditEvent[];
   currentUserId: string | null;

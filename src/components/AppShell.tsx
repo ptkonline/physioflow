@@ -1,14 +1,18 @@
 "use client";
 
 import { Logo } from "@/components/Logo";
+import { homePath } from "@/lib/paths";
 import { useCurrentUser, useStore } from "@/lib/store";
+import type { Role } from "@/lib/types";
 import {
   Bell,
   BookOpen,
   Calendar,
+  CalendarPlus,
   Home,
   LineChart,
   LogOut,
+  Stethoscope,
   StretchHorizontal,
   Users,
   Video,
@@ -28,10 +32,23 @@ const patientNav = [
 const physioNav = [
   { href: "/physio", label: "Home", icon: Home },
   { href: "/physio/patients", label: "Patients", icon: Users },
+  { href: "/physio/bookings", label: "Bookings", icon: Calendar },
+  { href: "/physio/doctors", label: "Doctors", icon: Stethoscope },
   { href: "/physio/library", label: "Library", icon: BookOpen },
-  { href: "/physio/programs", label: "Programs", icon: StretchHorizontal },
-  { href: "/physio/consults", label: "Visits", icon: Calendar },
 ];
+
+const staffNav = [
+  { href: "/staff", label: "Home", icon: Home },
+  { href: "/staff/bookings", label: "Bookings", icon: Calendar },
+  { href: "/staff/bookings/new", label: "New", icon: CalendarPlus },
+  { href: "/staff/doctors", label: "Doctors", icon: Stethoscope },
+];
+
+function navFor(role: Role) {
+  if (role === "physio") return physioNav;
+  if (role === "staff") return staffNav;
+  return patientNav;
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useCurrentUser();
@@ -39,16 +56,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   if (!user) return null;
 
-  const nav = user.role === "physio" ? physioNav : patientNav;
+  const nav = navFor(user.role);
   const unread = state.notifications.filter((n) => n.userId === user.id && !n.read).length;
-  const notifyHref = user.role === "physio" ? "/physio/notifications" : "/patient/notifications";
-  const settingsHref = user.role === "physio" ? "/physio/settings" : "/patient/settings";
+  const notifyHref =
+    user.role === "physio"
+      ? "/physio/notifications"
+      : user.role === "staff"
+        ? "/staff/bookings"
+        : "/patient/notifications";
+  const settingsHref = user.role === "patient" ? "/patient/settings" : user.role === "physio" ? "/physio/settings" : "/staff";
 
   return (
     <div className="min-h-screen bg-bg">
       <header className="sticky top-0 z-20 border-b border-line bg-elev/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <Link href={user.role === "physio" ? "/physio" : "/patient"} className="no-underline">
+          <Link href={homePath(user.role)} className="no-underline">
             <Logo />
           </Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -93,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-elev md:hidden"
         aria-label="Mobile"
       >
-        <ul className="grid grid-cols-5">
+        <ul className={`grid ${nav.length === 4 ? "grid-cols-4" : "grid-cols-5"}`}>
           {nav.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
