@@ -42,12 +42,12 @@ export default function HomePage() {
       <main className="mx-auto max-w-6xl px-4 pb-20">
         <section className="grid items-center gap-10 py-10 lg:grid-cols-2">
           <div className="space-y-5">
-            <p className="chip">For patients and physiotherapists</p>
+            <p className="chip">Two portals · no front desk</p>
             <h1 className="max-w-xl text-4xl font-semibold leading-tight md:text-5xl">
-              Recover at home with a plan you can follow.
+              Patients and doctors book directly with each other.
             </h1>
             <p className="max-w-lg text-lg text-muted">
-              PhysioFlow is a calm space for exercise programs, video visits, and recovery tracking — designed to be easy to read and easy to tap.
+              Create your own profile, see live doctor availability, and book. The visit appears on the doctor’s dashboard at once.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/register" className="btn btn-primary">
@@ -91,9 +91,9 @@ export default function HomePage() {
           ))}
         </section>
         <p className="mt-10 text-center text-sm text-muted">
-          Demo: <strong>priya@demo.physio</strong> (front desk),{" "}
-          <strong>james@demo.physio</strong> / <strong>aisha@demo.physio</strong> (doctors),{" "}
-          <strong>maya@demo.physio</strong> (patient). Password <strong>demo123</strong>.
+          Demo: <strong>maya@demo.physio</strong> (patient),{" "}
+          <strong>james@demo.physio</strong> / <strong>aisha@demo.physio</strong> (doctors). Password{" "}
+          <strong>demo123</strong>.
         </p>
       </main>
     </div>

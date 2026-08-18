@@ -8,7 +8,18 @@ import Link from "next/link";
 export default function PatientHome() {
   const { user, profile } = useCurrentUser();
   const { state } = useStore();
-  if (!user || !profile) return null;
+  if (!user) return null;
+  if (!profile) {
+    return (
+      <div className="card p-6">
+        <h1 className="text-2xl font-semibold">Your profile is still being created</h1>
+        <p className="mt-2 text-muted">Open Doctors to book, or sign out and register again as a patient.</p>
+        <Link href="/patient/doctors" className="btn btn-primary mt-4">
+          Browse doctors
+        </Link>
+      </div>
+    );
+  }
 
   const program = state.programs.find((p) => p.patientId === user.id && p.status === "active");
   const todayDone = state.completions.filter(
@@ -87,8 +98,11 @@ export default function PatientHome() {
               </Link>
             </>
           ) : (
-            <p className="mt-3 text-muted">No visits scheduled.</p>
+            <p className="mt-3 text-muted">No visits yet. Book a doctor when you are ready.</p>
           )}
+          <Link href="/patient/doctors" className="btn btn-ghost mt-3">
+            Browse doctors
+          </Link>
         </article>
       </div>
       <Link href="/patient/notifications" className="card flex items-center gap-3 p-4 no-underline">

@@ -21,8 +21,8 @@ export default function PhysioHome() {
           <p className="text-muted">Clinician workspace · {clinicId}</p>
           <h1 className="text-3xl font-semibold">{user.name}</h1>
         </div>
-        <Link href="/physio/bookings/new" className="btn btn-primary">
-          New booking
+        <Link href="/physio/availability" className="btn btn-ghost">
+          Set hours
         </Link>
       </header>
       <div className="grid gap-4 md:grid-cols-3">
@@ -41,7 +41,7 @@ export default function PhysioHome() {
       </div>
       <article className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Bookings for your ID</h2>
+          <h2 className="text-xl font-semibold">Incoming appointments</h2>
           <Link href="/physio/bookings">View all</Link>
         </div>
         <BookingList physioId={user.id} />

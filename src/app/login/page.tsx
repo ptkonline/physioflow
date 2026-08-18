@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 
 function LoginForm() {
-  const { login } = useStore();
+  const { login, hydrated } = useStore();
   const { user } = useCurrentUser();
   const router = useRouter();
   const params = useSearchParams();
@@ -17,15 +17,31 @@ function LoginForm() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    if (!hydrated || !user) return;
     const next = params.get("next");
-    router.replace(next || homePath(user.role));
-  }, [user, router, params]);
+    const dest = next && !next.startsWith("/staff") ? next : homePath(user.role);
+    if (user.role === "physio" && dest.startsWith("/patient")) {
+      router.replace("/physio");
+      return;
+    }
+    if (user.role === "patient" && dest.startsWith("/physio")) {
+      router.replace("/patient");
+      return;
+    }
+    router.replace(dest || homePath(user.role));
+  }, [hydrated, user, router, params]);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const ok = login(email, password);
+    const ok = login(email.trim(), password);
     setError(ok ? "" : "Email or password is not correct.");
+  }
+
+  function enter(nextEmail: string) {
+    setEmail(nextEmail);
+    setPassword("demo123");
+    const ok = login(nextEmail, "demo123");
+    if (!ok) setError("Demo account is not ready yet. Wait a moment and try again.");
   }
 
   return (
@@ -36,7 +52,7 @@ function LoginForm() {
         </Link>
         <form onSubmit={onSubmit} className="card space-y-4 p-6">
           <h1 className="text-2xl font-semibold">Sign in</h1>
-          <p className="text-muted">Use your email. Large fields, no rush.</p>
+          <p className="text-muted">Patient or doctor — no front desk.</p>
           <label className="block space-y-1">
             <span>Email</span>
             <input className="field" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -50,14 +66,14 @@ function LoginForm() {
             Continue
           </button>
           <div className="flex flex-col gap-2 text-sm">
-            <button type="button" className="btn btn-ghost" onClick={() => { setEmail("maya@demo.physio"); setPassword("demo123"); }}>
-              Patient demo
+            <button type="button" className="btn btn-ghost" onClick={() => enter("maya@demo.physio")}>
+              Enter patient portal
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => { setEmail("james@demo.physio"); setPassword("demo123"); }}>
-              Clinician demo
+            <button type="button" className="btn btn-ghost" onClick={() => enter("james@demo.physio")}>
+              Enter doctor portal (James)
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => { setEmail("priya@demo.physio"); setPassword("demo123"); }}>
-              Front desk demo
+            <button type="button" className="btn btn-ghost" onClick={() => enter("aisha@demo.physio")}>
+              Enter doctor portal (Aisha)
             </button>
           </div>
         </form>

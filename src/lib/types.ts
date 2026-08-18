@@ -1,4 +1,4 @@
-export type Role = "patient" | "physio" | "staff";
+export type Role = "patient" | "physio";
 
 export type Condition =
   | "knee"
@@ -22,6 +22,20 @@ export interface User {
   createdAt: string;
 }
 
+export interface WeekHours {
+  days: number[];
+  startHour: number;
+  endHour: number;
+  slotMin: number;
+}
+
+export const DEFAULT_HOURS: WeekHours = {
+  days: [1, 2, 3, 4, 5],
+  startHour: 9,
+  endHour: 17,
+  slotMin: 30,
+};
+
 export interface PatientProfile {
   userId: string;
   condition: Condition;
@@ -31,6 +45,10 @@ export interface PatientProfile {
   dateOfBirth: string;
   assignedPhysioId: string;
   phone?: string;
+  address?: string;
+  emergencyName?: string;
+  emergencyPhone?: string;
+  medicalHistory?: string;
 }
 
 export interface DoctorProfile {
@@ -39,6 +57,8 @@ export interface DoctorProfile {
   specialty: string;
   phone: string;
   bio: string;
+  qualifications?: string;
+  availability: WeekHours;
 }
 
 export interface Booking {

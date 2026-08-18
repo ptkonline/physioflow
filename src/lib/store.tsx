@@ -5,12 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { decryptJson, encryptJson } from "./crypto";
+import { decryptJson } from "./crypto";
 import { seedState } from "./seed";
 import type {
   AppNotification,
@@ -25,8 +27,27 @@ import type {
   ProgramItem,
   Role,
 } from "./types";
+import { DEFAULT_HOURS } from "./types";
 
-const STORAGE_KEY = "physioflow.v2";
+const STORAGE_KEY = "physioflow.v4";
+const LEGACY_KEY = "physioflow.v3";
+const SESSION_KEY = "physioflow.session";
+
+function readVaultSync(): AppState | null {
+  try {
+    const sessionId = localStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_KEY);
+    if (raw?.startsWith("{")) {
+      const parsed = JSON.parse(raw) as AppState;
+      if (sessionId) parsed.currentUserId = sessionId;
+      return parsed;
+    }
+    if (sessionId) return { ...seedState, currentUserId: sessionId };
+  } catch {
+    /* keep seed */
+  }
+  return null;
+}
 
 type Action =
   | { type: "hydrate"; state: AppState }
@@ -38,10 +59,21 @@ type Action =
       email: string;
       password: string;
       role: Role;
+      phone?: string;
       condition?: Condition;
       goal?: string;
+      dateOfBirth?: string;
+      address?: string;
+      emergencyName?: string;
+      emergencyPhone?: string;
+      medicalHistory?: string;
+      specialty?: string;
+      clinicId?: string;
+      bio?: string;
+      qualifications?: string;
     }
   | { type: "updateProfile"; profile: PatientProfile }
+  | { type: "updateDoctor"; doctor: DoctorProfile }
   | { type: "assignProgram"; program: Program }
   | {
       type: "completeExercise";
@@ -89,13 +121,33 @@ function uid(prefix: string) {
 }
 
 function normalizeState(incoming: AppState): AppState {
+  const doctors = (incoming.doctors ?? seedState.doctors).map((d) => ({
+    ...d,
+    availability: d.availability ?? DEFAULT_HOURS,
+  }));
+  const users = [...(incoming.users ?? [])];
+  for (const demo of seedState.users) {
+    if (!users.some((u) => u.id === demo.id || u.email.toLowerCase() === demo.email.toLowerCase())) {
+      users.push(demo);
+    }
+  }
+  const profiles = [...(incoming.profiles ?? [])];
+  for (const demo of seedState.profiles) {
+    if (!profiles.some((p) => p.userId === demo.userId)) profiles.push(demo);
+  }
+  const current =
+    incoming.currentUserId && users.some((u) => u.id === incoming.currentUserId)
+      ? incoming.currentUserId
+      : null;
   return {
     ...seedState,
     ...incoming,
-    doctors: incoming.doctors ?? seedState.doctors,
+    users,
+    profiles,
+    doctors,
     bookings: incoming.bookings ?? seedState.bookings,
     consults: incoming.consults ?? seedState.consults,
-    users: incoming.users ?? seedState.users,
+    currentUserId: current,
   };
 }
 
@@ -104,14 +156,30 @@ function reducer(state: AppState, action: Action): AppState {
     case "hydrate":
       return normalizeState(action.state);
     case "login": {
-      const user = state.users.find(
+      let users = state.users;
+      let profiles = state.profiles;
+      let user = users.find(
         (u) =>
           u.email.toLowerCase() === action.email.toLowerCase() &&
           u.password === action.password,
       );
+      if (!user) {
+        user = seedState.users.find(
+          (u) =>
+            u.email.toLowerCase() === action.email.toLowerCase() &&
+            u.password === action.password,
+        );
+        if (user) {
+          users = [...users, user];
+          const extra = seedState.profiles.filter((p) => p.userId === user.id);
+          profiles = [...profiles, ...extra.filter((p) => !profiles.some((x) => x.userId === p.userId))];
+        }
+      }
       if (!user) return state;
       return {
         ...state,
+        users,
+        profiles,
         currentUserId: user.id,
         audit: [
           ...state.audit,
@@ -138,6 +206,7 @@ function reducer(state: AppState, action: Action): AppState {
         email: action.email,
         password: action.password,
         role: action.role,
+        phone: action.phone,
         consentHipaa: true,
         consentGdpr: true,
         createdAt: new Date().toISOString(),
@@ -150,32 +219,55 @@ function reducer(state: AppState, action: Action): AppState {
                 userId: id,
                 condition: action.condition ?? "back",
                 goal: action.goal ?? "Improve daily mobility",
-                diagnosis: "Pending clinician review",
+                diagnosis: action.medicalHistory || "Self-registered",
                 painBaseline: 4,
-                dateOfBirth: "",
-                assignedPhysioId:
-                  state.doctors[0]?.userId ??
-                  state.users.find((u) => u.role === "physio")?.id ??
-                  "physio-james",
+                dateOfBirth: action.dateOfBirth ?? "",
+                assignedPhysioId: "",
+                phone: action.phone,
+                address: action.address,
+                emergencyName: action.emergencyName,
+                emergencyPhone: action.emergencyPhone,
+                medicalHistory: action.medicalHistory,
               },
             ]
           : state.profiles;
+      const doctors =
+        action.role === "physio"
+          ? [
+              ...state.doctors,
+              {
+                userId: id,
+                clinicId:
+                  action.clinicId?.trim() ||
+                  `DOC-${String(1000 + state.doctors.length + 1).padStart(4, "0")}`,
+                specialty: action.specialty ?? "General physiotherapy",
+                phone: action.phone ?? "",
+                bio: action.bio ?? "",
+                qualifications: action.qualifications,
+                availability: DEFAULT_HOURS,
+              },
+            ]
+          : state.doctors;
       return {
         ...state,
         users: [...state.users, user],
         profiles,
+        doctors,
         currentUserId: id,
         notifications: [
           ...state.notifications,
           {
             id: uid("n"),
             userId: id,
-            title: "Welcome to PhysioFlow",
-            body: "Your account is private. You can export or delete your data anytime.",
+            title: "Your profile is ready",
+            body:
+              action.role === "physio"
+                ? "Patients can now see you and book open slots."
+                : "Browse doctors and book a visit — no reception desk needed.",
             type: "system",
             read: false,
             createdAt: new Date().toISOString(),
-            href: "/privacy",
+            href: action.role === "physio" ? "/physio" : "/patient/doctors",
           },
         ],
       };
@@ -185,6 +277,13 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         profiles: state.profiles.map((p) =>
           p.userId === action.profile.userId ? action.profile : p,
+        ),
+      };
+    case "updateDoctor":
+      return {
+        ...state,
+        doctors: state.doctors.map((d) =>
+          d.userId === action.doctor.userId ? action.doctor : d,
         ),
       };
     case "assignProgram": {
@@ -445,6 +544,7 @@ function reducer(state: AppState, action: Action): AppState {
         specialty: action.specialty,
         phone: action.phone,
         bio: action.bio,
+        availability: DEFAULT_HOURS,
       };
       return {
         ...state,
@@ -550,10 +650,21 @@ interface StoreValue {
     email: string;
     password: string;
     role: Role;
+    phone?: string;
     condition?: Condition;
     goal?: string;
+    dateOfBirth?: string;
+    address?: string;
+    emergencyName?: string;
+    emergencyPhone?: string;
+    medicalHistory?: string;
+    specialty?: string;
+    clinicId?: string;
+    bio?: string;
+    qualifications?: string;
   }) => boolean;
   updateProfile: (profile: PatientProfile) => void;
+  updateDoctor: (doctor: DoctorProfile) => void;
   assignProgram: (input: {
     name: string;
     patientId: string;
@@ -605,24 +716,21 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, seedState);
   const [hydrated, setHydrated] = useState(false);
+  const sessionLock = useRef<string | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const cached = readVaultSync();
+    if (cached && !sessionLock.current) dispatch({ type: "hydrate", state: cached });
+    setHydrated(true);
+
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (!legacy || legacy.startsWith("{") || localStorage.getItem(STORAGE_KEY)) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = raw.startsWith("{")
-            ? (JSON.parse(raw) as AppState)
-            : await decryptJson<AppState>(raw);
-          if (!cancelled) dispatch({ type: "hydrate", state: parsed });
-        }
-      } catch {
-        /* keep seed */
-      } finally {
-        if (!cancelled) setHydrated(true);
-      }
-    })();
+    void decryptJson<AppState>(legacy).then((parsed) => {
+      const sessionId = localStorage.getItem(SESSION_KEY);
+      if (sessionId) parsed.currentUserId = sessionId;
+      if (!cancelled && !sessionLock.current) dispatch({ type: "hydrate", state: parsed });
+    });
     return () => {
       cancelled = true;
     };
@@ -630,12 +738,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    encryptJson(state).then((vault) => localStorage.setItem(STORAGE_KEY, vault));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      /* quota */
+    }
   }, [hydrated, state]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (state.currentUserId) localStorage.setItem(SESSION_KEY, state.currentUserId);
+      else localStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [hydrated, state.currentUserId]);
+
+  useEffect(() => {
     function onStorage(event: StorageEvent) {
-      if (event.key !== STORAGE_KEY || !event.newValue) return;
+      if ((event.key !== STORAGE_KEY && event.key !== LEGACY_KEY) || !event.newValue) return;
       const raw = event.newValue;
       void (async () => {
         try {
@@ -653,24 +775,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback((email: string, password: string) => {
-    const found = state.users.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
-    );
+    const found =
+      state.users.find(
+        (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
+      ) ??
+      seedState.users.find(
+        (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
+      );
     if (!found) return false;
+    sessionLock.current = found.id;
+    try {
+      localStorage.setItem(SESSION_KEY, found.id);
+    } catch {
+      /* ignore */
+    }
     dispatch({ type: "login", email, password });
     return true;
   }, [state.users]);
 
-  const logout = useCallback(() => dispatch({ type: "logout" }), []);
+  const logout = useCallback(() => {
+    sessionLock.current = null;
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+    dispatch({ type: "logout" });
+  }, []);
   const register = useCallback((input: Parameters<StoreValue["register"]>[0]) => {
     if (state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
       return false;
     }
     dispatch({ type: "register", ...input });
+    sessionLock.current = "pending";
     return true;
   }, [state.users]);
   const updateProfile = useCallback(
     (profile: PatientProfile) => dispatch({ type: "updateProfile", profile }),
+    [],
+  );
+  const updateDoctor = useCallback(
+    (doctor: DoctorProfile) => dispatch({ type: "updateDoctor", doctor }),
     [],
   );
   const assignProgram = useCallback(
@@ -753,6 +898,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const resetDemo = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_KEY);
     dispatch({ type: "hydrate", state: { ...seedState, currentUserId: null } });
   }, []);
 
@@ -764,6 +910,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logout,
       register,
       updateProfile,
+      updateDoctor,
       assignProgram,
       completeExercise,
       logPain,
@@ -797,6 +944,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       scheduleConsult,
       setConsultStatus,
       state,
+      updateDoctor,
       updateProfile,
     ],
   );

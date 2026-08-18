@@ -10,16 +10,16 @@ export default function PhysioBookings() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold">My bookings</h1>
-          <p className="text-muted">Front desk bookings for your clinic ID land here automatically.</p>
-        </div>
-        <Link href="/physio/bookings/new" className="btn btn-primary">
-          New booking
-        </Link>
+      <div>
+        <h1 className="text-3xl font-semibold">Appointments</h1>
+        <p className="text-muted">
+          When a patient books you, their name, time, and visit details appear here immediately. No one has to assign the booking.
+        </p>
       </div>
       <BookingList physioId={user.id} />
+      <Link href="/physio/availability" className="btn btn-ghost">
+        Edit clinic hours
+      </Link>
     </div>
   );
 }

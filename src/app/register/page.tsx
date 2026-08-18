@@ -16,8 +16,18 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [condition, setCondition] = useState<Condition>("knee");
   const [goal, setGoal] = useState(GOALS[0]);
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [address, setAddress] = useState("");
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
+  const [medicalHistory, setMedicalHistory] = useState("");
+  const [specialty, setSpecialty] = useState("General physiotherapy");
+  const [clinicId, setClinicId] = useState("");
+  const [bio, setBio] = useState("");
+  const [qualifications, setQualifications] = useState("");
   const [hipaa, setHipaa] = useState(false);
   const [gdpr, setGdpr] = useState(false);
   const [error, setError] = useState("");
@@ -28,7 +38,24 @@ export default function RegisterPage() {
       setError("Please accept both privacy statements to continue.");
       return;
     }
-    const ok = register({ name, email, password, role, condition, goal });
+    const ok = register({
+      name,
+      email,
+      password,
+      role,
+      phone,
+      condition,
+      goal,
+      dateOfBirth,
+      address,
+      emergencyName,
+      emergencyPhone,
+      medicalHistory,
+      specialty,
+      clinicId,
+      bio,
+      qualifications,
+    });
     if (!ok) {
       setError("That email is already in use.");
       return;
@@ -37,22 +64,22 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-10">
+    <div className="mx-auto max-w-2xl px-4 py-10">
       <Link href="/" className="no-underline">
         <Logo className="text-xl" />
       </Link>
       <form onSubmit={onSubmit} className="card mt-6 space-y-4 p-6">
-        <h1 className="text-2xl font-semibold">Create your account</h1>
-        <p className="text-muted">Tell us who you are. You can change details later.</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {(["patient", "physio", "staff"] as Role[]).map((r) => (
+        <h1 className="text-2xl font-semibold">Create your profile</h1>
+        <p className="text-muted">Two portals only — patients and doctors. Your profile is created as soon as you save.</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(["patient", "physio"] as Role[]).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRole(r)}
               className={`btn ${role === r ? "btn-primary" : "btn-ghost"}`}
             >
-              {r === "patient" ? "Patient" : r === "physio" ? "Doctor" : "Front desk"}
+              {r === "patient" ? "Patient portal" : "Doctor portal"}
             </button>
           ))}
         </div>
@@ -60,16 +87,30 @@ export default function RegisterPage() {
           <span>Full name</span>
           <input className="field" value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
-        <label className="block space-y-1">
-          <span>Email</span>
-          <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block space-y-1">
+            <span>Email</span>
+            <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </label>
+          <label className="block space-y-1">
+            <span>Phone</span>
+            <input className="field" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+          </label>
+        </div>
         <label className="block space-y-1">
           <span>Password</span>
           <input className="field" type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
         {role === "patient" && (
           <>
+            <label className="block space-y-1">
+              <span>Date of birth</span>
+              <input className="field" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
+            </label>
+            <label className="block space-y-1">
+              <span>Home address</span>
+              <input className="field" value={address} onChange={(e) => setAddress(e.target.value)} required />
+            </label>
             <label className="block space-y-1">
               <span>Main condition</span>
               <select className="field" value={condition} onChange={(e) => setCondition(e.target.value as Condition)}>
@@ -81,13 +122,48 @@ export default function RegisterPage() {
               </select>
             </label>
             <label className="block space-y-1">
-              <span>Recovery goal</span>
+              <span>Goal</span>
               <select className="field" value={goal} onChange={(e) => setGoal(e.target.value)}>
                 {GOALS.map((g) => (
                   <option key={g}>{g}</option>
                 ))}
               </select>
             </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block space-y-1">
+                <span>Emergency contact name</span>
+                <input className="field" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} required />
+              </label>
+              <label className="block space-y-1">
+                <span>Emergency phone</span>
+                <input className="field" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} required />
+              </label>
+            </div>
+            <label className="block space-y-1">
+              <span>Medical history / notes</span>
+              <textarea className="field min-h-24" value={medicalHistory} onChange={(e) => setMedicalHistory(e.target.value)} />
+            </label>
+          </>
+        )}
+        {role === "physio" && (
+          <>
+            <label className="block space-y-1">
+              <span>Specialty</span>
+              <input className="field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} required />
+            </label>
+            <label className="block space-y-1">
+              <span>Clinic ID (optional — we generate one if blank)</span>
+              <input className="field" placeholder="DOC-1003" value={clinicId} onChange={(e) => setClinicId(e.target.value)} />
+            </label>
+            <label className="block space-y-1">
+              <span>Qualifications</span>
+              <input className="field" value={qualifications} onChange={(e) => setQualifications(e.target.value)} required />
+            </label>
+            <label className="block space-y-1">
+              <span>Professional profile</span>
+              <textarea className="field min-h-24" value={bio} onChange={(e) => setBio(e.target.value)} required />
+            </label>
+            <p className="text-sm text-muted">Default hours are Monday–Friday, 9:00–17:00. You can change them in Hours after you sign in.</p>
           </>
         )}
         <label className="flex items-start gap-3">
@@ -100,7 +176,7 @@ export default function RegisterPage() {
         </label>
         {error && <p className="text-rose">{error}</p>}
         <button className="btn btn-primary w-full" type="submit">
-          Create account
+          Create my profile
         </button>
         <p className="text-center text-muted">
           Already registered? <Link href="/login">Sign in</Link>

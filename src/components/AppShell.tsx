@@ -8,14 +8,11 @@ import {
   Bell,
   BookOpen,
   Calendar,
-  CalendarPlus,
   Home,
   LineChart,
   LogOut,
-  Stethoscope,
   StretchHorizontal,
   Users,
-  Video,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,31 +20,22 @@ import type { ReactNode } from "react";
 
 const patientNav = [
   { href: "/patient", label: "Home", icon: Home },
+  { href: "/patient/doctors", label: "Doctors", icon: Users },
+  { href: "/patient/appointments", label: "Appointments", icon: Calendar },
   { href: "/patient/program", label: "Program", icon: StretchHorizontal },
   { href: "/patient/library", label: "Library", icon: BookOpen },
-  { href: "/patient/progress", label: "Progress", icon: LineChart },
-  { href: "/patient/consults", label: "Visits", icon: Video },
 ];
 
 const physioNav = [
   { href: "/physio", label: "Home", icon: Home },
+  { href: "/physio/bookings", label: "Appointments", icon: Calendar },
   { href: "/physio/patients", label: "Patients", icon: Users },
-  { href: "/physio/bookings", label: "Bookings", icon: Calendar },
-  { href: "/physio/doctors", label: "Doctors", icon: Stethoscope },
+  { href: "/physio/availability", label: "Hours", icon: LineChart },
   { href: "/physio/library", label: "Library", icon: BookOpen },
 ];
 
-const staffNav = [
-  { href: "/staff", label: "Home", icon: Home },
-  { href: "/staff/bookings", label: "Bookings", icon: Calendar },
-  { href: "/staff/bookings/new", label: "New", icon: CalendarPlus },
-  { href: "/staff/doctors", label: "Doctors", icon: Stethoscope },
-];
-
 function navFor(role: Role) {
-  if (role === "physio") return physioNav;
-  if (role === "staff") return staffNav;
-  return patientNav;
+  return role === "physio" ? physioNav : patientNav;
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -58,13 +46,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const nav = navFor(user.role);
   const unread = state.notifications.filter((n) => n.userId === user.id && !n.read).length;
-  const notifyHref =
-    user.role === "physio"
-      ? "/physio/notifications"
-      : user.role === "staff"
-        ? "/staff/bookings"
-        : "/patient/notifications";
-  const settingsHref = user.role === "patient" ? "/patient/settings" : user.role === "physio" ? "/physio/settings" : "/staff";
+  const notifyHref = user.role === "physio" ? "/physio/notifications" : "/patient/notifications";
+  const settingsHref = user.role === "physio" ? "/physio/settings" : "/patient/settings";
 
   return (
     <div className="min-h-screen bg-bg">
@@ -75,14 +58,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
             {nav.map((item) => {
-              const active = pathname === item.href;
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 no-underline ${
-                    active ? "bg-sage text-teal-dark" : "text-muted hover:bg-white"
+                    active && item.href !== "/patient" && item.href !== "/physio"
+                      ? "bg-sage text-teal-dark"
+                      : pathname === item.href
+                        ? "bg-sage text-teal-dark"
+                        : "text-muted hover:bg-white"
                   }`}
                 >
                   <Icon size={18} /> {item.label}
@@ -115,7 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-elev md:hidden"
         aria-label="Mobile"
       >
-        <ul className={`grid ${nav.length === 4 ? "grid-cols-4" : "grid-cols-5"}`}>
+        <ul className="grid grid-cols-5">
           {nav.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
@@ -123,6 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={false}
                   className={`flex flex-col items-center gap-1 py-3 text-xs no-underline ${
                     active ? "text-teal" : "text-muted"
                   }`}

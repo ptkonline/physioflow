@@ -1,16 +1,24 @@
 "use client";
 
+import { formatSlot } from "@/lib/availability";
 import { useStore } from "@/lib/store";
 import Link from "next/link";
 
-export function BookingList({ physioId }: { physioId?: string }) {
+export function BookingList({
+  physioId,
+  patientId,
+}: {
+  physioId?: string;
+  patientId?: string;
+}) {
   const { state } = useStore();
   const rows = (state.bookings ?? [])
     .filter((b) => (physioId ? b.physioId === physioId : true))
+    .filter((b) => (patientId ? b.patientId === patientId : true))
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
   if (rows.length === 0) {
-    return <p className="card p-6 text-muted">No bookings yet.</p>;
+    return <p className="card p-6 text-muted">No appointments yet.</p>;
   }
 
   return (
@@ -21,13 +29,13 @@ export function BookingList({ physioId }: { physioId?: string }) {
         return (
           <li key={b.id} className="card flex flex-wrap items-center justify-between gap-3 p-5">
             <div>
-              <p className="font-semibold">{b.patientName}</p>
-              <p className="text-muted">
-                {b.reason} · {new Date(b.scheduledAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
-              </p>
+              <p className="text-sm text-muted">{formatSlot(b.scheduledAt)} · {b.durationMin} min</p>
+              <p className="text-xl font-semibold">{b.patientName}</p>
+              <p className="text-muted">{b.reason}</p>
               <p className="text-sm text-muted">
                 {b.patientPhone} · {b.patientEmail}
               </p>
+              {b.notes && <p className="mt-1 text-sm">Notes: {b.notes}</p>}
               <p className="text-sm text-muted">
                 {doctor?.name} {clinicId ? `· ${clinicId}` : ""}
               </p>

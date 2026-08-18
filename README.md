@@ -16,17 +16,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Role | Email | Password | Clinic ID |
 | --- | --- | --- | --- |
-| Front desk | priya@demo.physio | demo123 | — |
+| Patient | maya@demo.physio | demo123 | — |
 | Doctor | james@demo.physio | demo123 | DOC-1001 |
 | Doctor | aisha@demo.physio | demo123 | DOC-1002 |
-| Patient | maya@demo.physio | demo123 | — |
 
 ## What’s included
 
-- Front desk **New booking** (patient details, doctor, date/time, reason)
-- Automatic assignment: bookings appear on that doctor’s dashboard and clinic ID
-- Doctor directory: add doctors with login, specialty, and clinic ID
-- Cross-tab sync so a booking made at reception shows on the doctor’s open session
+- Two self-serve portals (patient and doctor) with no front desk
+- Detailed self-registration that creates a unique profile automatically
+- Patients browse doctors, specialties, and live open slots, then book
+- Bookings appear on the doctor’s dashboard immediately (including across tabs)
 - Patient onboarding (condition + goals)
 - Exercise library grouped by condition, with video and steps
 - Clinician-assigned programs from the patient chart

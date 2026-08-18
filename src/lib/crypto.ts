@@ -1,8 +1,9 @@
 function bytesToB64(bytes: Uint8Array) {
+  const chunk = 0x8000;
   let binary = "";
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
-  });
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
   return btoa(binary);
 }
 
@@ -14,12 +15,15 @@ function b64ToBytes(payload: string) {
 }
 
 const KEY_NAME = "physioflow.device-key";
+let cachedKey: CryptoKey | null = null;
 
 async function getKey(): Promise<CryptoKey> {
+  if (cachedKey) return cachedKey;
   const existing = localStorage.getItem(KEY_NAME);
   const raw = existing ? b64ToBytes(existing) : crypto.getRandomValues(new Uint8Array(32));
   if (!existing) localStorage.setItem(KEY_NAME, bytesToB64(raw));
-  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+  cachedKey = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+  return cachedKey;
 }
 
 export async function encryptJson(value: unknown): Promise<string> {
