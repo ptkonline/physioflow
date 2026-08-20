@@ -4,6 +4,11 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    // Firestore cannot read .env. Paste the Firebase Auth UID of the single admin
+    // (same value as ADMIN_UID in .env.local). Deny-by-default if left as the placeholder.
+    function isPlatformAdmin() {
+      return signedIn() && request.auth.uid == "REPLACE_WITH_ADMIN_FIREBASE_UID";
+    }
     function isParticipant(patientId, doctorId) {
       return signedIn() && (request.auth.uid == patientId || request.auth.uid == doctorId);
     }
@@ -15,7 +20,14 @@ service cloud.firestore {
 
     match /doctors_public/{doctorId} {
       allow read: if true;
-      allow write: if signedIn() && request.auth.uid == doctorId;
+      allow create: if signedIn()
+        && request.auth.uid == doctorId
+        && request.resource.data.get("isVerified", false) == false;
+      allow update: if isPlatformAdmin()
+        || (signedIn()
+          && request.auth.uid == doctorId
+          && request.resource.data.get("isVerified", false) == resource.data.get("isVerified", false));
+      allow delete: if isPlatformAdmin();
     }
 
     match /chats/{chatId} {
@@ -50,8 +62,9 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if true;
+      allow read: if signedIn() && (request.auth.uid == userId || isPlatformAdmin());
       allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if isPlatformAdmin();
     }
 
     match /daily_logs/{logId} {

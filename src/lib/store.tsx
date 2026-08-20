@@ -30,6 +30,7 @@ import type {
 } from "./types";
 import { DEFAULT_HOURS } from "./types";
 import type { DailyLog, Prescription, Review } from "./care-types";
+import { revokeAdminSession } from "./admin-actions";
 import { clearAuthCookies, setAuthCookies } from "./auth-session";
 
 const STORAGE_KEY = "physioflow.v4";
@@ -756,7 +757,7 @@ function reducer(state: AppState, action: Action): AppState {
 interface StoreValue {
   state: AppState;
   hydrated: boolean;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => User | false;
   logout: () => void;
   register: (input: {
     name: string;
@@ -931,7 +932,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
     dispatch({ type: "login", email, password });
-    return true;
+    return found;
   }, [state.users]);
 
   const logout = useCallback(() => {
@@ -942,6 +943,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+    void revokeAdminSession();
     dispatch({ type: "logout" });
   }, []);
   const register = useCallback((input: Parameters<StoreValue["register"]>[0]) => {

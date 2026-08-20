@@ -2,8 +2,10 @@
 
 import { Logo } from "@/components/Logo";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
+import { issueAdminSession } from "@/lib/admin-actions";
 import { homePath } from "@/lib/paths";
 import { useCurrentUser, useStore } from "@/lib/store";
+import type { User } from "@/lib/types";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,30 +24,42 @@ function LoginForm() {
 
   useEffect(() => {
     if (!hydrated || !user) return;
-    const next = params.get("next");
-    const dest = next && !next.startsWith("/staff") ? next : homePath(user.role);
-    if (user.role === "physio" && dest.startsWith("/patient")) {
-      router.replace("/doctor/dashboard");
-      return;
-    }
-    if (user.role === "patient" && (dest.startsWith("/physio") || dest.startsWith("/doctor"))) {
-      router.replace("/patient/dashboard");
-      return;
-    }
-    router.replace(dest || homePath(user.role));
+    let cancelled = false;
+    void (async () => {
+      const claimed = await issueAdminSession({ email: user.email, userId: user.id });
+      if (cancelled) return;
+      const next = params.get("next");
+      if (next?.startsWith("/admin")) {
+        router.replace(claimed.admin ? next : "/unauthorized");
+        return;
+      }
+      const dest = next && !next.startsWith("/staff") ? next : homePath(user.role);
+      if (user.role === "physio" && dest.startsWith("/patient")) {
+        router.replace("/doctor/dashboard");
+        return;
+      }
+      if (user.role === "patient" && (dest.startsWith("/physio") || dest.startsWith("/doctor"))) {
+        router.replace("/patient/dashboard");
+        return;
+      }
+      router.replace(dest || homePath(user.role));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [hydrated, user, router, params]);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const ok = login(email.trim(), password);
-    setError(ok ? "" : t("invalid"));
+    const found: User | false = login(email.trim(), password);
+    setError(found ? "" : t("invalid"));
   }
 
   function enter(nextEmail: string) {
     setEmail(nextEmail);
     setPassword("demo123");
-    const ok = login(nextEmail, "demo123");
-    if (!ok) setError("Demo account is not ready yet. Wait a moment and try again.");
+    const found = login(nextEmail, "demo123");
+    if (!found) setError("Demo account is not ready yet. Wait a moment and try again.");
   }
 
   return (
