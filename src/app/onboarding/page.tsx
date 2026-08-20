@@ -19,7 +19,7 @@ export default function OnboardingPage() {
     return null;
   }
   if (user.role !== "patient" || !profile) {
-    router.replace("/physio");
+    router.replace("/doctor/dashboard");
     return null;
   }
 
@@ -34,7 +34,7 @@ export default function OnboardingPage() {
         onSubmit={(e) => {
           e.preventDefault();
           updateProfile({ ...profile, condition, goal });
-          router.push("/patient");
+          router.push("/patient/dashboard");
         }}
       >
         <fieldset>

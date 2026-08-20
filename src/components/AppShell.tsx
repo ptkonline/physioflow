@@ -27,11 +27,11 @@ const patientNav = [
 ];
 
 const physioNav = [
-  { href: "/physio", label: "Home", icon: Home },
-  { href: "/physio/bookings", label: "Appointments", icon: Calendar },
-  { href: "/physio/patients", label: "Patients", icon: Users },
-  { href: "/physio/availability", label: "Hours", icon: LineChart },
-  { href: "/physio/library", label: "Library", icon: BookOpen },
+  { href: "/doctor", label: "Home", icon: Home },
+  { href: "/doctor/appointments", label: "Appointments", icon: Calendar },
+  { href: "/doctor/patients", label: "Patients", icon: Users },
+  { href: "/doctor/availability", label: "Hours", icon: LineChart },
+  { href: "/doctor/library", label: "Library", icon: BookOpen },
 ];
 
 function navFor(role: Role) {
@@ -46,8 +46,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const nav = navFor(user.role);
   const unread = state.notifications.filter((n) => n.userId === user.id && !n.read).length;
-  const notifyHref = user.role === "physio" ? "/physio/notifications" : "/patient/notifications";
-  const settingsHref = user.role === "physio" ? "/physio/settings" : "/patient/settings";
+  const notifyHref = user.role === "physio" ? "/doctor/notifications" : "/patient/notifications";
+  const settingsHref = user.role === "physio" ? "/doctor/settings" : "/patient/settings";
 
   return (
     <div className="min-h-screen bg-bg">
@@ -66,7 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   href={item.href}
                   prefetch={false}
                   className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 no-underline ${
-                    active && item.href !== "/patient" && item.href !== "/physio"
+                    active && item.href !== "/patient" && item.href !== "/doctor"
                       ? "bg-sage text-teal-dark"
                       : pathname === item.href
                         ? "bg-sage text-teal-dark"

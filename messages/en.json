@@ -1,0 +1,98 @@
+{
+  "common": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "continue": "Continue",
+    "save": "Save",
+    "cancel": "Cancel",
+    "download": "Download",
+    "loading": "Loading…",
+    "error": "Something went wrong.",
+    "verified": "Verified",
+    "english": "English",
+    "hindi": "Hindi"
+  },
+  "nav": {
+    "home": "Home",
+    "doctors": "Doctors",
+    "appointments": "Appointments",
+    "prescriptions": "Rx",
+    "today": "Today",
+    "library": "Library",
+    "patients": "Patients",
+    "hours": "Hours",
+    "videos": "Videos",
+    "notifications": "Notifications",
+    "settings": "Settings"
+  },
+  "auth": {
+    "title": "Sign in",
+    "subtitle": "Patient or doctor — no front desk.",
+    "email": "Email",
+    "password": "Password",
+    "invalid": "Email or password is not correct.",
+    "patientPortal": "Enter patient portal",
+    "doctorJames": "Enter doctor portal (James)",
+    "doctorAisha": "Enter doctor portal (Aisha)"
+  },
+  "tracker": {
+    "title": "Daily check-in",
+    "subtitle": "Log today’s exercises and pain so your doctor can see recovery over time.",
+    "didExercises": "Did you do your exercises today?",
+    "yes": "Yes",
+    "no": "No",
+    "pain": "Pain level (1 is mild, 10 is worst)",
+    "note": "Optional note",
+    "notePlaceholder": "How did your body feel?",
+    "saved": "Saved for today.",
+    "already": "You already checked in today. You can update this entry.",
+    "update": "Update check-in",
+    "submit": "Save check-in",
+    "history": "Recent check-ins",
+    "adherence": "Exercise days",
+    "avgPain": "Average pain"
+  },
+  "progress": {
+    "title": "Recovery chart",
+    "painOverTime": "Pain over time",
+    "adherence": "Exercise adherence",
+    "empty": "Not enough check-ins yet.",
+    "did": "Did exercises",
+    "skipped": "Skipped"
+  },
+  "rx": {
+    "title": "Prescriptions",
+    "doctorHelp": "Write medicines and notes, then generate a PDF for this appointment.",
+    "patientHelp": "Download PDFs your doctor issued after a visit.",
+    "appointment": "Appointment",
+    "select": "Select",
+    "rxTitle": "Title",
+    "medicine": "Medicine",
+    "dosage": "Dosage",
+    "frequency": "Frequency",
+    "duration": "Duration",
+    "addRow": "Add medicine",
+    "notes": "Clinical notes",
+    "generate": "Generate PDF",
+    "empty": "No prescriptions yet.",
+    "generating": "Creating PDF…",
+    "error": "Could not create that PDF.",
+    "download": "Download"
+  },
+  "map": {
+    "clinic": "Clinic location",
+    "directions": "Get directions",
+    "missing": "This clinic has not published a map location yet."
+  },
+  "review": {
+    "rate": "Rate {name}",
+    "placeholder": "What helped, and what should change?",
+    "submit": "Submit review",
+    "thanks": "Thanks — your review is on their profile.",
+    "existing": "You rated this visit {rating}/5"
+  },
+  "language": {
+    "title": "Language",
+    "help": "Buttons and labels follow this preference on this device."
+  }
+}

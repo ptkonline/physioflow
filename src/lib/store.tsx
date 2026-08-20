@@ -26,8 +26,11 @@ import type {
   Program,
   ProgramItem,
   Role,
+  User,
 } from "./types";
 import { DEFAULT_HOURS } from "./types";
+import type { DailyLog, Prescription, Review } from "./care-types";
+import { clearAuthCookies, setAuthCookies } from "./auth-session";
 
 const STORAGE_KEY = "physioflow.v4";
 const LEGACY_KEY = "physioflow.v3";
@@ -98,6 +101,17 @@ type Action =
       reason: string;
       notes: string;
       condition?: Condition;
+      bookingId?: string;
+      consultId?: string;
+      paymentId?: string;
+      razorpayOrderId?: string;
+      paymentStatus?: Booking["paymentStatus"];
+      amount?: number;
+      currency?: string;
+      paymentMethod?: string;
+      paidAt?: string;
+      consultationFee?: number;
+      platformFee?: number;
     }
   | {
       type: "addDoctor";
@@ -110,9 +124,15 @@ type Action =
       bio: string;
     }
   | { type: "setConsultStatus"; id: string; status: Consult["status"] }
+  | { type: "setBookingStatus"; id: string; status: Booking["status"] }
+  | { type: "addReview"; review: Omit<Review, "id" | "createdAt"> }
+  | { type: "addPrescription"; prescription: Omit<Prescription, "id" | "createdAt"> }
+  | { type: "upsertDailyLog"; log: Omit<DailyLog, "id" | "createdAt"> }
+  | { type: "markBookingReminder"; id: string; window: "24h" | "1h" }
   | { type: "markNotificationsRead"; userId: string }
   | { type: "addNotification"; notification: Omit<AppNotification, "id" | "createdAt" | "read"> }
   | { type: "addExercise"; exercise: Exercise }
+  | { type: "toggleFavoriteVideo"; patientId: string; videoId: string }
   | { type: "audit"; actorId: string; action: string; detail: string }
   | { type: "deleteAccount"; userId: string };
 
@@ -121,11 +141,24 @@ function uid(prefix: string) {
 }
 
 function normalizeState(incoming: AppState): AppState {
-  const doctors = (incoming.doctors ?? seedState.doctors).map((d) => ({
-    ...d,
-    availability: d.availability ?? DEFAULT_HOURS,
-  }));
-  const users = [...(incoming.users ?? [])];
+  const doctors = (incoming.doctors ?? seedState.doctors).map((d) => {
+    const seeded = seedState.doctors.find((s) => s.userId === d.userId);
+    return {
+      ...d,
+      availability: d.availability ?? DEFAULT_HOURS,
+      isVerified: d.isVerified ?? seeded?.isVerified,
+      location: d.location ?? seeded?.location,
+      photoUrl: d.photoUrl ?? seeded?.photoUrl,
+      consultationFee: d.consultationFee ?? seeded?.consultationFee,
+    };
+  });
+  const users: User[] = [...(incoming.users ?? [])].map((u) => {
+    const doctor = doctors.find((d) => d.userId === u.id);
+    return {
+      ...u,
+      profileImageUrl: u.profileImageUrl || doctor?.photoUrl,
+    };
+  });
   for (const demo of seedState.users) {
     if (!users.some((u) => u.id === demo.id || u.email.toLowerCase() === demo.email.toLowerCase())) {
       users.push(demo);
@@ -147,6 +180,9 @@ function normalizeState(incoming: AppState): AppState {
     doctors,
     bookings: incoming.bookings ?? seedState.bookings,
     consults: incoming.consults ?? seedState.consults,
+    reviews: incoming.reviews ?? seedState.reviews ?? [],
+    prescriptions: incoming.prescriptions ?? seedState.prescriptions ?? [],
+    dailyLogs: incoming.dailyLogs ?? seedState.dailyLogs ?? [],
     currentUserId: current,
   };
 }
@@ -170,8 +206,9 @@ function reducer(state: AppState, action: Action): AppState {
             u.password === action.password,
         );
         if (user) {
-          users = [...users, user];
-          const extra = seedState.profiles.filter((p) => p.userId === user.id);
+          const seeded = user;
+          users = [...users, seeded];
+          const extra = seedState.profiles.filter((p) => p.userId === seeded.id);
           profiles = [...profiles, ...extra.filter((p) => !profiles.some((x) => x.userId === p.userId))];
         }
       }
@@ -267,7 +304,7 @@ function reducer(state: AppState, action: Action): AppState {
             type: "system",
             read: false,
             createdAt: new Date().toISOString(),
-            href: action.role === "physio" ? "/physio" : "/patient/doctors",
+            href: action.role === "physio" ? "/doctor/dashboard" : "/patient/book-appointment",
           },
         ],
       };
@@ -450,8 +487,8 @@ function reducer(state: AppState, action: Action): AppState {
         users = users.map((u) => (u.id === patientId ? { ...u, phone: action.patientPhone, name: action.patientName.trim() } : u));
       }
 
-      const consultId = uid("call");
-      const bookingId = uid("book");
+      const consultId = action.consultId ?? uid("call");
+      const bookingId = action.bookingId ?? uid("book");
       const consult: Consult = {
         id: consultId,
         patientId,
@@ -476,6 +513,15 @@ function reducer(state: AppState, action: Action): AppState {
         notes: action.notes,
         status: "upcoming",
         createdAt: new Date().toISOString(),
+        paymentId: action.paymentId,
+        razorpayOrderId: action.razorpayOrderId,
+        paymentStatus: action.paymentStatus ?? "success",
+        amount: action.amount,
+        currency: action.currency ?? "INR",
+        paymentMethod: action.paymentMethod ?? "offline",
+        paidAt: action.paidAt,
+        consultationFee: action.consultationFee,
+        platformFee: action.platformFee,
       };
       const clinicId = state.doctors.find((d) => d.userId === action.physioId)?.clinicId ?? action.physioId;
       return {
@@ -494,7 +540,7 @@ function reducer(state: AppState, action: Action): AppState {
             type: "consult",
             read: false,
             createdAt: new Date().toISOString(),
-            href: "/physio/bookings",
+            href: "/doctor/appointments",
           },
           {
             id: uid("n"),
@@ -560,7 +606,7 @@ function reducer(state: AppState, action: Action): AppState {
             type: "system",
             read: false,
             createdAt: new Date().toISOString(),
-            href: "/physio/bookings",
+            href: "/doctor/appointments",
           },
         ],
       };
@@ -576,6 +622,61 @@ function reducer(state: AppState, action: Action): AppState {
             ? {
                 ...b,
                 status: action.status === "live" ? "upcoming" : action.status,
+              }
+            : b,
+        ),
+      };
+    case "setBookingStatus":
+      return {
+        ...state,
+        bookings: (state.bookings ?? []).map((b) => (b.id === action.id ? { ...b, status: action.status } : b)),
+        consults: state.consults.map((c) => {
+          const booking = (state.bookings ?? []).find((b) => b.id === action.id);
+          return booking && c.id === booking.consultId
+            ? { ...c, status: action.status === "upcoming" ? "upcoming" : action.status }
+            : c;
+        }),
+      };
+    case "addReview": {
+      if (state.reviews.some((r) => r.appointmentId === action.review.appointmentId)) return state;
+      return {
+        ...state,
+        reviews: [
+          ...state.reviews,
+          { ...action.review, id: uid("rev"), createdAt: new Date().toISOString() },
+        ],
+      };
+    }
+    case "addPrescription":
+      return {
+        ...state,
+        prescriptions: [
+          ...state.prescriptions,
+          { ...action.prescription, id: uid("rx"), createdAt: new Date().toISOString() },
+        ],
+      };
+    case "upsertDailyLog": {
+      const logs = state.dailyLogs ?? [];
+      const idx = logs.findIndex(
+        (l) => l.patientId === action.log.patientId && l.date === action.log.date,
+      );
+      const row: DailyLog = {
+        ...action.log,
+        id: idx >= 0 ? logs[idx].id : uid("dlog"),
+        createdAt: idx >= 0 ? logs[idx].createdAt : new Date().toISOString(),
+      };
+      const dailyLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? row : l)) : [...logs, row];
+      return { ...state, dailyLogs };
+    }
+    case "markBookingReminder":
+      return {
+        ...state,
+        bookings: (state.bookings ?? []).map((b) =>
+          b.id === action.id
+            ? {
+                ...b,
+                reminded24h: action.window === "24h" ? true : b.reminded24h,
+                reminded1h: action.window === "1h" ? true : b.reminded1h,
               }
             : b,
         ),
@@ -605,6 +706,18 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "addExercise":
       return { ...state, exercises: [...state.exercises, action.exercise] };
+    case "toggleFavoriteVideo":
+      return {
+        ...state,
+        profiles: state.profiles.map((p) => {
+          if (p.userId !== action.patientId) return p;
+          const ids = p.favoriteVideoIds ?? [];
+          const favoriteVideoIds = ids.includes(action.videoId)
+            ? ids.filter((id) => id !== action.videoId)
+            : [...ids, action.videoId];
+          return { ...p, favoriteVideoIds };
+        }),
+      };
     case "audit":
       return {
         ...state,
@@ -692,7 +805,18 @@ interface StoreValue {
     reason: string;
     notes: string;
     condition?: Condition;
-  }) => boolean;
+    bookingId?: string;
+    consultId?: string;
+    paymentId?: string;
+    razorpayOrderId?: string;
+    paymentStatus?: Booking["paymentStatus"];
+    amount?: number;
+    currency?: string;
+    paymentMethod?: string;
+    paidAt?: string;
+    consultationFee?: number;
+    platformFee?: number;
+  }) => string | false;
   addDoctor: (input: {
     name: string;
     email: string;
@@ -703,9 +827,15 @@ interface StoreValue {
     bio: string;
   }) => boolean;
   setConsultStatus: (id: string, status: Consult["status"]) => void;
+  setBookingStatus: (id: string, status: Booking["status"]) => void;
+  addReview: (review: Omit<Review, "id" | "createdAt">) => void;
+  addPrescription: (prescription: Omit<Prescription, "id" | "createdAt">) => void;
+  upsertDailyLog: (log: Omit<DailyLog, "id" | "createdAt">) => void;
+  markBookingReminder: (id: string, window: "24h" | "1h") => void;
   markNotificationsRead: (userId: string) => void;
   addNotification: (n: Omit<AppNotification, "id" | "createdAt" | "read">) => void;
   addExercise: (exercise: Exercise) => void;
+  toggleFavoriteVideo: (patientId: string, videoId: string) => void;
   audit: (actorId: string, action: string, detail: string) => void;
   deleteAccount: (userId: string) => void;
   resetDemo: () => void;
@@ -721,6 +851,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const cached = readVaultSync();
     if (cached && !sessionLock.current) dispatch({ type: "hydrate", state: cached });
+    if (cached?.currentUserId) {
+      const user = cached.users.find((u) => u.id === cached.currentUserId);
+      if (user) setAuthCookies(user.role, user.id);
+    }
     setHydrated(true);
 
     const legacy = localStorage.getItem(LEGACY_KEY);
@@ -748,12 +882,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      if (state.currentUserId) localStorage.setItem(SESSION_KEY, state.currentUserId);
-      else localStorage.removeItem(SESSION_KEY);
+      if (state.currentUserId) {
+        localStorage.setItem(SESSION_KEY, state.currentUserId);
+        const user = state.users.find((u) => u.id === state.currentUserId);
+        if (user) setAuthCookies(user.role, user.id);
+      } else {
+        localStorage.removeItem(SESSION_KEY);
+        clearAuthCookies();
+      }
     } catch {
       /* ignore */
     }
-  }, [hydrated, state.currentUserId]);
+  }, [hydrated, state.currentUserId, state.users]);
 
   useEffect(() => {
     function onStorage(event: StorageEvent) {
@@ -786,6 +926,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     sessionLock.current = found.id;
     try {
       localStorage.setItem(SESSION_KEY, found.id);
+      setAuthCookies(found.role, found.id);
     } catch {
       /* ignore */
     }
@@ -797,6 +938,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     sessionLock.current = null;
     try {
       localStorage.removeItem(SESSION_KEY);
+      clearAuthCookies();
     } catch {
       /* ignore */
     }
@@ -858,8 +1000,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         (u) => u.email.toLowerCase() === input.patientEmail.trim().toLowerCase() && u.role !== "patient",
       );
       if (!doctor || clash) return false;
-      dispatch({ type: "createBooking", ...input });
-      return true;
+      const bookingId = input.bookingId ?? `book-${Math.random().toString(36).slice(2, 9)}`;
+      const consultId = input.consultId ?? `call-${Math.random().toString(36).slice(2, 9)}`;
+      dispatch({ type: "createBooking", ...input, bookingId, consultId });
+      return bookingId;
     },
     [state.users],
   );
@@ -874,6 +1018,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (id: string, status: Consult["status"]) => dispatch({ type: "setConsultStatus", id, status }),
     [],
   );
+  const setBookingStatus = useCallback(
+    (id: string, status: Booking["status"]) => dispatch({ type: "setBookingStatus", id, status }),
+    [],
+  );
+  const addReview = useCallback(
+    (review: Omit<Review, "id" | "createdAt">) => dispatch({ type: "addReview", review }),
+    [],
+  );
+  const addPrescription = useCallback(
+    (prescription: Omit<Prescription, "id" | "createdAt">) =>
+      dispatch({ type: "addPrescription", prescription }),
+    [],
+  );
+  const upsertDailyLog = useCallback(
+    (log: Omit<DailyLog, "id" | "createdAt">) => dispatch({ type: "upsertDailyLog", log }),
+    [],
+  );
+  const markBookingReminder = useCallback(
+    (id: string, window: "24h" | "1h") => dispatch({ type: "markBookingReminder", id, window }),
+    [],
+  );
   const markNotificationsRead = useCallback(
     (userId: string) => dispatch({ type: "markNotificationsRead", userId }),
     [],
@@ -885,6 +1050,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const addExercise = useCallback(
     (exercise: Exercise) => dispatch({ type: "addExercise", exercise }),
+    [],
+  );
+  const toggleFavoriteVideo = useCallback(
+    (patientId: string, videoId: string) => dispatch({ type: "toggleFavoriteVideo", patientId, videoId }),
     [],
   );
   const audit = useCallback(
@@ -918,9 +1087,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createBooking,
       addDoctor,
       setConsultStatus,
+      setBookingStatus,
+      addReview,
+      addPrescription,
+      upsertDailyLog,
+      markBookingReminder,
       markNotificationsRead,
       addNotification,
       addExercise,
+      toggleFavoriteVideo,
       audit,
       deleteAccount,
       resetDemo,
@@ -942,7 +1117,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       register,
       resetDemo,
       scheduleConsult,
+      setBookingStatus,
       setConsultStatus,
+      addReview,
+      addPrescription,
+      upsertDailyLog,
+      markBookingReminder,
+      toggleFavoriteVideo,
       state,
       updateDoctor,
       updateProfile,

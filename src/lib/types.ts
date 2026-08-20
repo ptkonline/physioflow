@@ -1,3 +1,5 @@
+import type { DailyLog, DoctorLocation, Prescription, Review } from "./care-types";
+
 export type Role = "patient" | "physio";
 
 export type Condition =
@@ -17,6 +19,9 @@ export interface User {
   password: string;
   role: Role;
   phone?: string;
+  profileImageUrl?: string;
+  locale?: "en" | "hi";
+  fcmToken?: string;
   consentHipaa: boolean;
   consentGdpr: boolean;
   createdAt: string;
@@ -44,6 +49,7 @@ export interface PatientProfile {
   painBaseline: number;
   dateOfBirth: string;
   assignedPhysioId: string;
+  favoriteVideoIds?: string[];
   phone?: string;
   address?: string;
   emergencyName?: string;
@@ -59,7 +65,13 @@ export interface DoctorProfile {
   bio: string;
   qualifications?: string;
   availability: WeekHours;
+  photoUrl?: string;
+  isVerified?: boolean;
+  location?: DoctorLocation;
+  consultationFee?: number;
 }
+
+export type PaymentStatus = "pending" | "success" | "failed" | "refunded";
 
 export interface Booking {
   id: string;
@@ -76,6 +88,17 @@ export interface Booking {
   notes: string;
   status: "upcoming" | "completed" | "cancelled";
   createdAt: string;
+  reminded24h?: boolean;
+  reminded1h?: boolean;
+  paymentId?: string;
+  razorpayOrderId?: string;
+  paymentStatus?: PaymentStatus;
+  amount?: number;
+  currency?: string;
+  paymentMethod?: string;
+  paidAt?: string;
+  consultationFee?: number;
+  platformFee?: number;
 }
 
 export interface Exercise {
@@ -169,5 +192,8 @@ export interface AppState {
   doctors: DoctorProfile[];
   notifications: AppNotification[];
   audit: AuditEvent[];
+  reviews: Review[];
+  prescriptions: Prescription[];
+  dailyLogs: DailyLog[];
   currentUserId: string | null;
 }

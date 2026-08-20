@@ -48,7 +48,7 @@ export function VideoCall({ consultId }: { consultId: string }) {
     streamRef.current = null;
     setLive(false);
     if (consult) setConsultStatus(consult.id, "completed");
-    router.push(user?.role === "physio" ? "/physio/consults" : "/patient/consults");
+    router.push(user?.role === "physio" ? "/doctor/consults" : "/patient/consults");
   }
 
   function toggleMute() {

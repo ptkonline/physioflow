@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isParticipant(patientId, doctorId) {
+      return signedIn() && (request.auth.uid == patientId || request.auth.uid == doctorId);
+    }
+
+    match /doctors_pending_verification/{id} {
+      allow create: if request.resource.data.status == "pending";
+      allow read, update, delete: if false;
+    }
+
+    match /doctors_public/{doctorId} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == doctorId;
+    }
+
+    match /chats/{chatId} {
+      allow read: if isParticipant(resource.data.patientId, resource.data.doctorId);
+      allow create: if signedIn()
+        && request.resource.data.appointmentId == chatId
+        && isParticipant(request.resource.data.patientId, request.resource.data.doctorId);
+      allow update: if isParticipant(resource.data.patientId, resource.data.doctorId);
+
+      match /messages/{messageId} {
+        allow read: if isParticipant(
+          get(/databases/$(database)/documents/chats/$(chatId)).data.patientId,
+          get(/databases/$(database)/documents/chats/$(chatId)).data.doctorId
+        );
+        allow create: if signedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && isParticipant(
+            get(/databases/$(database)/documents/chats/$(chatId)).data.patientId,
+            get(/databases/$(database)/documents/chats/$(chatId)).data.doctorId
+          );
+        allow update, delete: if false;
+      }
+    }
+
+    match /videos/{videoId} {
+      allow create: if signedIn()
+        && request.resource.data.doctorId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.videoUrl is string;
+      allow update, delete: if signedIn() && resource.data.doctorId == request.auth.uid;
+      allow read: if resource.data.isPublic == true || signedIn();
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /daily_logs/{logId} {
+      allow create, update: if signedIn()
+        && request.resource.data.patientId == request.auth.uid
+        && request.resource.data.painLevel is int
+        && request.resource.data.painLevel >= 1
+        && request.resource.data.painLevel <= 10;
+      allow read: if signedIn()
+        && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.doctorId);
+      allow delete: if false;
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isParticipant(resource.data.patientId, resource.data.physioId);
+      allow create: if signedIn()
+        && request.resource.data.paymentStatus == "success";
+      allow update: if signedIn()
+        && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.physioId);
+    }
+
+    match /payment_orders/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.patientId == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && exists(/databases/$(database)/documents/bookings/$(request.resource.data.appointmentId))
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.appointmentId)).data.status == "completed"
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.appointmentId)).data.patientId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /prescriptions/{id} {
+      allow read: if signedIn()
+        && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.doctorId);
+      allow create: if signedIn() && request.resource.data.doctorId == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}
