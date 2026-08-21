@@ -1,5 +1,6 @@
 "use client";
 
+import { LocationSelector } from "@/components/maps/LocationSelector";
 import {
   DEGREES,
   SPECIALIZATIONS,
@@ -53,7 +54,10 @@ export function DoctorRegisterForm() {
       experienceYears: 1,
       clinicName: "",
       address: "",
-      fees: 800,
+      latitude: 28.6139,
+      longitude: 77.209,
+      onlineFee: 800,
+      offlineFee: 1000,
       availabilityDays: [1, 2, 3, 4, 5],
       startHour: 9,
       endHour: 17,
@@ -182,16 +186,31 @@ export function DoctorRegisterForm() {
             <input className="field" {...register("clinicName")} />
             {errors.clinicName && <p className="text-rose">{errors.clinicName.message}</p>}
           </label>
-          <label className="block space-y-1">
-            <span>Clinic address</span>
-            <textarea className="field min-h-24" {...register("address")} />
-            {errors.address && <p className="text-rose">{errors.address.message}</p>}
-          </label>
-          <label className="block space-y-1">
-            <span>Consultation fees (₹)</span>
-            <input className="field" type="number" min={1} step={50} {...register("fees", { valueAsNumber: true })} />
-            {errors.fees && <p className="text-rose">{errors.fees.message}</p>}
-          </label>
+          <LocationSelector
+            value={{
+              latitude: watch("latitude"),
+              longitude: watch("longitude"),
+              address: watch("address"),
+            }}
+            onChange={(next) => {
+              setValue("latitude", next.latitude, { shouldValidate: true, shouldDirty: true });
+              setValue("longitude", next.longitude, { shouldValidate: true, shouldDirty: true });
+              setValue("address", next.address, { shouldValidate: true, shouldDirty: true });
+            }}
+          />
+          {errors.address && <p className="text-rose">{errors.address.message}</p>}
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block space-y-1">
+              <span>Online fee (₹)</span>
+              <input className="field" type="number" min={1} step={50} {...register("onlineFee", { valueAsNumber: true })} />
+              {errors.onlineFee && <p className="text-rose">{errors.onlineFee.message}</p>}
+            </label>
+            <label className="block space-y-1">
+              <span>Offline / clinic fee (₹)</span>
+              <input className="field" type="number" min={1} step={50} {...register("offlineFee", { valueAsNumber: true })} />
+              {errors.offlineFee && <p className="text-rose">{errors.offlineFee.message}</p>}
+            </label>
+          </div>
           <fieldset>
             <legend className="font-medium">Availability</legend>
             <div className="mt-2 flex flex-wrap gap-2">

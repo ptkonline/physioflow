@@ -114,6 +114,10 @@ type Action =
       paidAt?: string;
       consultationFee?: number;
       platformFee?: number;
+      mode?: Booking["mode"];
+      finalPrice?: number;
+      clinicAddress?: string;
+      meetingLink?: string;
     }
   | {
       type: "addDoctor";
@@ -150,8 +154,14 @@ function normalizeState(incoming: AppState): AppState {
       availability: d.availability ?? DEFAULT_HOURS,
       isVerified: d.isVerified ?? seeded?.isVerified,
       location: d.location ?? seeded?.location,
+      clinicLocation: d.clinicLocation ?? seeded?.clinicLocation ?? (d.location
+        ? { latitude: d.location.lat, longitude: d.location.lng, address: d.location.address }
+        : seeded?.location
+          ? { latitude: seeded.location.lat, longitude: seeded.location.lng, address: seeded.location.address }
+          : undefined),
       photoUrl: d.photoUrl ?? seeded?.photoUrl,
       consultationFee: d.consultationFee ?? seeded?.consultationFee,
+      pricing: d.pricing ?? seeded?.pricing,
     };
   });
   const users: User[] = [...(incoming.users ?? [])].map((u) => {
@@ -524,6 +534,10 @@ function reducer(state: AppState, action: Action): AppState {
         paidAt: action.paidAt,
         consultationFee: action.consultationFee,
         platformFee: action.platformFee,
+        mode: action.mode,
+        finalPrice: action.finalPrice ?? action.consultationFee ?? action.amount,
+        clinicAddress: action.clinicAddress,
+        meetingLink: action.mode === "online" ? `/consult/${consultId}` : action.meetingLink,
       };
       const clinicId = state.doctors.find((d) => d.userId === action.physioId)?.clinicId ?? action.physioId;
       return {
@@ -818,6 +832,10 @@ interface StoreValue {
     paidAt?: string;
     consultationFee?: number;
     platformFee?: number;
+    mode?: Booking["mode"];
+    finalPrice?: number;
+    clinicAddress?: string;
+    meetingLink?: string;
   }) => string | false;
   addDoctor: (input: {
     name: string;

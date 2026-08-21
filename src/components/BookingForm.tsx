@@ -1,8 +1,11 @@
 "use client";
 
 import { CONDITIONS } from "@/lib/seed";
+import { clinicPoint } from "@/lib/geo";
+import { doctorPricing, formatInr } from "@/lib/pricing";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { Condition } from "@/lib/types";
+import type { VisitMode } from "@/lib/care-types";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 
@@ -31,10 +34,15 @@ export function BookingForm({ afterHref }: { afterHref: string }) {
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [condition, setCondition] = useState<Condition>("knee");
+  const [mode, setMode] = useState<VisitMode>("online");
   const [error, setError] = useState("");
 
   if (!user) return null;
   const createdById = user.id;
+  const selectedPricing = doctorPricing(physioId, {
+    consultationFee: state.doctors.find((d) => d.userId === physioId)?.consultationFee,
+    pricing: state.doctors.find((d) => d.userId === physioId)?.pricing,
+  });
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -42,6 +50,9 @@ export function BookingForm({ afterHref }: { afterHref: string }) {
       setError("Choose a doctor and a date.");
       return;
     }
+    const profile = state.doctors.find((d) => d.userId === physioId);
+    const pricing = doctorPricing(physioId, { consultationFee: profile?.consultationFee, pricing: profile?.pricing });
+    const pin = clinicPoint(profile);
     const ok = createBooking({
       createdById,
       physioId,
@@ -53,6 +64,11 @@ export function BookingForm({ afterHref }: { afterHref: string }) {
       reason,
       notes,
       condition,
+      mode,
+      finalPrice: mode === "offline" ? pricing.offlineFee : pricing.onlineFee,
+      clinicAddress: mode === "offline" ? pin?.address : undefined,
+      consultationFee: mode === "offline" ? pricing.offlineFee : pricing.onlineFee,
+      amount: (mode === "offline" ? pricing.offlineFee : pricing.onlineFee) + 0,
     });
     if (!ok) {
       setError("Could not create this booking. Check the email is not already used by staff or a doctor.");
@@ -73,6 +89,19 @@ export function BookingForm({ afterHref }: { afterHref: string }) {
           ))}
         </select>
       </label>
+      <fieldset className="space-y-2">
+        <legend className="font-medium">Visit mode</legend>
+        <div className="flex flex-wrap gap-2">
+          <label className={`btn ${mode === "online" ? "btn-primary" : "btn-ghost"}`}>
+            <input className="sr-only" type="radio" name="visit-mode" checked={mode === "online"} onChange={() => setMode("online")} />
+            Online · {formatInr(selectedPricing.onlineFee)}
+          </label>
+          <label className={`btn ${mode === "offline" ? "btn-primary" : "btn-ghost"}`}>
+            <input className="sr-only" type="radio" name="visit-mode" checked={mode === "offline"} onChange={() => setMode("offline")} />
+            Clinic · {formatInr(selectedPricing.offlineFee)}
+          </label>
+        </div>
+      </fieldset>
       <label className="block space-y-1">
         <span>Patient full name</span>
         <input className="field" value={patientName} onChange={(e) => setPatientName(e.target.value)} required />

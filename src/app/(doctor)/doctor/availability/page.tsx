@@ -1,5 +1,6 @@
 "use client";
 
+import { DoctorPracticeForm } from "@/components/doctor/DoctorPracticeForm";
 import { DEFAULT_HOURS, type WeekHours } from "@/lib/types";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { FormEvent, useState } from "react";
@@ -36,7 +37,8 @@ export default function DoctorHours() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="card mx-auto max-w-xl space-y-4 p-6">
+    <div className="mx-auto max-w-xl space-y-5">
+    <form onSubmit={onSubmit} className="card space-y-4 p-6">
       <h1 className="text-3xl font-semibold">Clinic hours</h1>
       <p className="text-muted">Open slots update for patients as soon as you save. Booked times stay blocked.</p>
       <fieldset>
@@ -83,5 +85,7 @@ export default function DoctorHours() {
       </button>
       {saved && <p className="text-teal-dark">Patients now see these open slots.</p>}
     </form>
+    <DoctorPracticeForm />
+    </div>
   );
 }

@@ -17,7 +17,10 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Missing doctor, patient, or appointment time." }, { status: 400 });
   }
 
-  const quote = quoteFees(draft.doctorId);
+  const quote = quoteFees(draft.doctorId, undefined, draft.mode ?? "online", {
+    onlineFee: draft.onlineFee,
+    offlineFee: draft.offlineFee,
+  });
   const receipt = `pf_${Date.now().toString(36)}`.slice(0, 40);
 
   if (!isRazorpayConfigured()) {

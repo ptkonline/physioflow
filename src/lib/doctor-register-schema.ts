@@ -57,7 +57,10 @@ export const doctorRegisterSchema = z
     experienceYears: z.number().int().min(0, "Enter years of experience").max(55, "Check experience years"),
     clinicName: z.string().trim().min(2, "Enter clinic or practice name"),
     address: z.string().trim().min(8, "Enter the clinic address"),
-    fees: z.number().positive("Enter consultation fees").max(100000, "Check the fee amount"),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    onlineFee: z.number().positive("Enter a positive online fee").max(100000, "Check the fee amount"),
+    offlineFee: z.number().positive("Enter a positive clinic visit fee").max(100000, "Check the fee amount"),
     availabilityDays: z.array(z.number().int().min(0).max(6)).min(1, "Select at least one working day"),
     startHour: z.number().int().min(6).max(21),
     endHour: z.number().int().min(7).max(22),
@@ -76,7 +79,7 @@ export type DoctorRegisterValues = z.infer<typeof doctorRegisterSchema>;
 export const STEP_FIELDS = [
   ["name", "email", "phone", "password"],
   ["degree", "specialization", "registrationNumber", "experienceYears"],
-  ["clinicName", "address", "fees", "availabilityDays", "startHour", "endHour"],
+  ["clinicName", "address", "latitude", "longitude", "onlineFee", "offlineFee", "availabilityDays", "startHour", "endHour"],
   ["profilePhoto"],
   ["degreeCert", "idProof", "registrationCard"],
 ] as const satisfies ReadonlyArray<ReadonlyArray<keyof DoctorRegisterValues>>;

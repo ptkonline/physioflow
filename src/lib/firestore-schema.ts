@@ -8,9 +8,11 @@
  * prescriptions/{id}
  * daily_logs/{id} — one check-in per patient per calendar day
  * reminder_dispatches/{id} — 24h / 1h appointment reminders already sent
- * bookings/{id} (clinic appointments)
- *   paymentId, paymentStatus, amount, currency, paymentMethod, paidAt,
- *   razorpayOrderId, consultationFee, platformFee
+ * doctors_public/{doctorId}
+ *   clinicLocation { latitude, longitude, address }
+ *   pricing { onlineFee, offlineFee, currency }
+ * bookings/{id}
+ *   mode: online | offline, finalPrice, clinicAddress, meetingLink
  *
  * payment_orders are stored server-side (process memory / webhook idempotency),
  * not writable from the client.

@@ -53,7 +53,17 @@ async function submitLocal(values: DoctorRegisterValues) {
     experienceYears: values.experienceYears,
     clinicName: values.clinicName,
     address: values.address,
-    fees: values.fees,
+    clinicLocation: {
+      latitude: values.latitude,
+      longitude: values.longitude,
+      address: values.address,
+    },
+    pricing: {
+      onlineFee: values.onlineFee,
+      offlineFee: values.offlineFee,
+      currency: "INR",
+    },
+    fees: values.onlineFee,
     availability: {
       days: values.availabilityDays,
       startHour: values.startHour,
@@ -115,7 +125,17 @@ export async function submitDoctorApplication(values: DoctorRegisterValues) {
     experienceYears: values.experienceYears,
     clinicName: values.clinicName,
     address: values.address,
-    fees: values.fees,
+    clinicLocation: {
+      latitude: values.latitude,
+      longitude: values.longitude,
+      address: values.address,
+    },
+    pricing: {
+      onlineFee: values.onlineFee,
+      offlineFee: values.offlineFee,
+      currency: "INR",
+    },
+    fees: values.onlineFee,
     availability: {
       days: values.availabilityDays,
       startHour: values.startHour,

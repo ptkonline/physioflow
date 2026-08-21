@@ -310,6 +310,12 @@ export const seedState: AppState = {
       },
       availability: { days: [1, 2, 3, 4, 5], startHour: 9, endHour: 17, slotMin: 30 },
       consultationFee: 1500,
+      clinicLocation: {
+        latitude: 28.6328,
+        longitude: 77.2197,
+        address: "12 Connaught Place, New Delhi 110001",
+      },
+      pricing: { onlineFee: 1500, offlineFee: 1800, currency: "INR" },
     },
     {
       userId: "physio-aisha",
@@ -328,6 +334,12 @@ export const seedState: AppState = {
       },
       availability: { days: [1, 2, 3, 4], startHour: 10, endHour: 16, slotMin: 30 },
       consultationFee: 1800,
+      clinicLocation: {
+        latitude: 28.5733,
+        longitude: 77.2305,
+        address: "88 Defence Colony, New Delhi 110024",
+      },
+      pricing: { onlineFee: 1800, offlineFee: 2200, currency: "INR" },
     },
   ],
   programs: [
@@ -407,6 +419,9 @@ export const seedState: AppState = {
       notes: "Booked in the patient portal",
       status: "upcoming",
       createdAt: iso(-4),
+      mode: "online",
+      finalPrice: 1500,
+      meetingLink: "/consult/call-1",
     },
     {
       id: "book-done",

@@ -30,12 +30,18 @@ service cloud.firestore {
     match /doctors_public/{doctorId} {
       allow read: if true;
       allow create: if signedIn()
-        && request.auth.uid == doctorId
+        && (request.auth.uid == doctorId || emailIs(request.resource.data.email))
         && request.resource.data.get("isVerified", false) == false;
       allow update: if isPlatformAdmin()
         || (signedIn()
-          && request.auth.uid == doctorId
-          && request.resource.data.get("isVerified", false) == resource.data.get("isVerified", false));
+          && (request.auth.uid == doctorId || emailIs(resource.data.email) || emailIs(request.resource.data.email))
+          && request.resource.data.get("isVerified", false) == resource.data.get("isVerified", false)
+          && (!("pricing" in request.resource.data) || (
+            request.resource.data.pricing.onlineFee is number
+            && request.resource.data.pricing.onlineFee > 0
+            && request.resource.data.pricing.offlineFee is number
+            && request.resource.data.pricing.offlineFee > 0
+          )));
       allow delete: if isPlatformAdmin();
     }
 

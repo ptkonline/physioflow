@@ -75,6 +75,21 @@ export interface DoctorLocation {
   lng: number;
 }
 
+/** Canonical clinic pin used for nearby search. */
+export interface ClinicLocation {
+  latitude: number;
+  longitude: number;
+  address: string;
+}
+
+export interface DoctorPricing {
+  onlineFee: number;
+  offlineFee: number;
+  currency: string;
+}
+
+export type VisitMode = "online" | "offline";
+
 export interface DailyLog {
   id: string;
   patientId: string;

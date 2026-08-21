@@ -38,6 +38,11 @@ function ConfirmedBody() {
             {formatInr(booking.amount)} · {booking.paymentId}
           </p>
         )}
+        {booking.mode && (
+          <p className="text-muted">
+            {booking.mode === "offline" ? `Clinic visit${booking.clinicAddress ? ` · ${booking.clinicAddress}` : ""}` : "Online video visit"}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Link href="/patient/appointments" className="btn btn-primary">
             View appointments

@@ -2,6 +2,7 @@
 
 import { RatingAndReview } from "@/components/reviews/RatingAndReview";
 import { formatSlot } from "@/lib/availability";
+import { formatInr } from "@/lib/pricing";
 import { useCurrentUser, useStore } from "@/lib/store";
 import Link from "next/link";
 
@@ -38,6 +39,7 @@ export function BookingList({
               <div>
                 <p className="text-sm text-muted">
                   {formatSlot(b.scheduledAt)} · {b.durationMin} min
+                  {b.mode ? ` · ${b.mode === "offline" ? "Clinic visit" : "Online"}` : ""}
                 </p>
                 <p className="text-xl font-semibold">{isDoctor ? b.patientName : doctor?.name}</p>
                 <p className="text-muted">{b.reason}</p>
@@ -49,6 +51,7 @@ export function BookingList({
                   {doctor?.name} {clinicId ? `· ${clinicId}` : ""}
                 </p>
                 <span className="chip mt-2">{b.status}</span>
+                {b.mode && <span className="chip mt-2 ml-2">{b.mode === "offline" ? "Offline" : "Online"}</span>}
                 {b.paymentStatus && <span className="chip mt-2 ml-2">{b.paymentStatus}</span>}
                 {b.amount != null && b.amount > 0 && (
                   <p className="mt-2 text-sm text-muted">
@@ -61,9 +64,11 @@ export function BookingList({
                 <Link href={`${chatBase}/${b.id}`} className="btn btn-primary">
                   Open chat
                 </Link>
-                <Link href={`/consult/${b.consultId}`} className="btn btn-ghost">
+                {b.mode !== "offline" && (
+                <Link href={b.meetingLink || `/consult/${b.consultId}`} className="btn btn-ghost">
                   Open visit
                 </Link>
+                )}
                 <Link href={`${rxBase}?booking=${b.id}`} className="btn btn-ghost">
                   Prescriptions
                 </Link>

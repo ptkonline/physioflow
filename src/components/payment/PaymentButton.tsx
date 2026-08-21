@@ -3,7 +3,7 @@
 import { FeeBreakdown } from "@/components/payment/FeeBreakdown";
 import type { AppointmentDraft, FeeQuote } from "@/lib/pricing";
 import { quoteFees } from "@/lib/pricing";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type RazorpaySuccess = {
   razorpay_payment_id: string;
@@ -48,10 +48,21 @@ export function PaymentButton({
     paidAt: string;
   }) => void;
 }) {
-  const preview = useMemo(() => quoteFees(draft.doctorId, profileFee), [draft.doctorId, profileFee]);
+  const preview = useMemo(
+    () =>
+      quoteFees(draft.doctorId, profileFee, draft.mode ?? "online", {
+        onlineFee: draft.onlineFee,
+        offlineFee: draft.offlineFee,
+      }),
+    [draft.doctorId, draft.mode, draft.offlineFee, draft.onlineFee, profileFee],
+  );
   const [quote, setQuote] = useState(preview);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setQuote(preview);
+  }, [preview]);
 
   async function startPay() {
     setBusy(true);

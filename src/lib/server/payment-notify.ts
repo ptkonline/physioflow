@@ -64,5 +64,8 @@ export function parseDraft(body: Record<string, unknown>): AppointmentDraft | nu
     durationMin: Math.max(15, Number(body.durationMin ?? 30) || 30),
     reason: String(body.reason ?? "Consultation").slice(0, 200),
     notes: String(body.notes ?? "").slice(0, 1000),
+    mode: body.mode === "offline" ? "offline" : "online",
+    onlineFee: Number(body.onlineFee) || undefined,
+    offlineFee: Number(body.offlineFee) || undefined,
   };
 }
