@@ -45,6 +45,8 @@ export async function ensureChatRoom(input: {
   appointmentId: string;
   patientId: string;
   doctorId: string;
+  patientEmail?: string;
+  doctorEmail?: string;
 }): Promise<ChatRoom> {
   const id = chatIdFor(input.appointmentId);
   const room: ChatRoom = {
@@ -66,14 +68,18 @@ export async function ensureChatRoom(input: {
   const { db } = getFirebase();
   const refDoc = doc(db, "chats", id);
   const existing = await getDoc(refDoc);
+  const payload = {
+    appointmentId: input.appointmentId,
+    patientId: input.patientId,
+    doctorId: input.doctorId,
+    patientEmail: (input.patientEmail ?? "").trim().toLowerCase(),
+    doctorEmail: (input.doctorEmail ?? "").trim().toLowerCase(),
+    updatedAt: serverTimestamp(),
+  };
   if (!existing.exists()) {
-    await setDoc(refDoc, {
-      appointmentId: input.appointmentId,
-      patientId: input.patientId,
-      doctorId: input.doctorId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(refDoc, { ...payload, createdAt: serverTimestamp() });
+  } else {
+    await setDoc(refDoc, payload, { merge: true });
   }
   return room;
 }
@@ -81,15 +87,19 @@ export async function ensureChatRoom(input: {
 export function subscribeMessages(
   appointmentId: string,
   onChange: (messages: ChatMessage[]) => void,
+  onError?: (message: string) => void,
 ): () => void {
   const id = chatIdFor(appointmentId);
   if (!isFirebaseConfigured()) {
     const emit = () => onChange(localRooms()[id]?.messages ?? []);
     emit();
     const handler = () => emit();
+    const bc = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(`pf-chat-${id}`);
+    bc?.addEventListener("message", handler);
     bus?.addEventListener("chats", handler);
     window.addEventListener("storage", handler);
     return () => {
+      bc?.close();
       bus?.removeEventListener("chats", handler);
       window.removeEventListener("storage", handler);
     };
@@ -100,27 +110,31 @@ export function subscribeMessages(
     orderBy("createdAt", "desc"),
     limit(PAGE_SIZE),
   );
-  return onSnapshot(q, (snap) => {
-    const rows = snap.docs
-      .map((d) => {
-        const data = d.data();
-        const created = data.createdAt as Timestamp | string | undefined;
-        return {
-          id: d.id,
-          senderId: String(data.senderId ?? ""),
-          text: String(data.text ?? ""),
-          imageUrl: data.imageUrl as string | undefined,
-          fileUrl: data.fileUrl as string | undefined,
-          videoId: data.videoId as string | undefined,
-          videoUrl: data.videoUrl as string | undefined,
-          videoTitle: data.videoTitle as string | undefined,
-          type: (data.type as MessageType) ?? "text",
-          createdAt: typeof created === "string" ? created : created?.toDate().toISOString() ?? new Date().toISOString(),
-        } satisfies ChatMessage;
-      })
-      .reverse();
-    onChange(rows);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const rows = snap.docs
+        .map((d) => {
+          const data = d.data();
+          const created = data.createdAt as Timestamp | string | undefined;
+          return {
+            id: d.id,
+            senderId: String(data.senderId ?? ""),
+            text: String(data.text ?? ""),
+            imageUrl: data.imageUrl as string | undefined,
+            fileUrl: data.fileUrl as string | undefined,
+            videoId: data.videoId as string | undefined,
+            videoUrl: data.videoUrl as string | undefined,
+            videoTitle: data.videoTitle as string | undefined,
+            type: (data.type as MessageType) ?? "text",
+            createdAt: typeof created === "string" ? created : created?.toDate().toISOString() ?? new Date().toISOString(),
+          } satisfies ChatMessage;
+        })
+        .reverse();
+      onChange(rows);
+    },
+    (err) => onError?.(err.message),
+  );
 }
 
 async function uploadChatFile(appointmentId: string, file: File, kind: "image" | "file") {
@@ -174,6 +188,9 @@ export async function sendChatMessage(input: {
     all[id].messages.push(message);
     all[id].room.updatedAt = message.createdAt;
     saveLocal(all);
+    if (typeof BroadcastChannel !== "undefined") {
+      new BroadcastChannel(`pf-chat-${id}`).postMessage({ type: "chats" });
+    }
     return;
   }
   const { db } = getFirebase();

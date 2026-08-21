@@ -11,12 +11,16 @@ export function ChatWindow({
   appointmentId,
   patientId,
   doctorId,
+  patientEmail,
+  doctorEmail,
   currentUserId,
   currentIsPatient,
 }: {
   appointmentId: string;
   patientId: string;
   doctorId: string;
+  patientEmail: string;
+  doctorEmail: string;
   currentUserId: string;
   currentIsPatient: boolean;
 }) {
@@ -25,16 +29,27 @@ export function ChatWindow({
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState(false);
   const [library, setLibrary] = useState<LibraryVideo[]>([]);
+  const [error, setError] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
     let unsub = () => {};
-    void ensureChatRoom({ appointmentId, patientId, doctorId }).then(() => {
-      unsub = subscribeMessages(appointmentId, setMessages);
-    });
-    return () => unsub();
-  }, [appointmentId, patientId, doctorId]);
+    void ensureChatRoom({ appointmentId, patientId, doctorId, patientEmail, doctorEmail })
+      .then(() => {
+        if (cancelled) return;
+        unsub = subscribeMessages(appointmentId, setMessages, setError);
+        if (cancelled) unsub();
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not open this chat.");
+      });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [appointmentId, patientId, doctorId, patientEmail, doctorEmail]);
 
   useEffect(() => {
     if (currentIsPatient) return;
@@ -74,7 +89,8 @@ export function ChatWindow({
   return (
     <div className="card flex h-[min(70vh,640px)] flex-col overflow-hidden">
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.length === 0 && <p className="text-muted">No messages yet. Say hello to start the visit thread.</p>}
+        {error && <p className="text-rose">{error}</p>}
+        {messages.length === 0 && !error && <p className="text-muted">No messages yet. Say hello to start the visit thread.</p>}
         {messages.map((m) => {
           const mine = m.senderId === currentUserId;
           const patientSide = currentIsPatient ? mine : !mine;

@@ -30,6 +30,7 @@ import type {
 } from "./types";
 import { DEFAULT_HOURS } from "./types";
 import type { DailyLog, Prescription, Review } from "./care-types";
+import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
 import { revokeAdminSession } from "./admin-actions";
 import { clearAuthCookies, setAuthCookies } from "./auth-session";
 
@@ -897,6 +898,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [hydrated, state.currentUserId, state.users]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    const user = state.users.find((u) => u.id === state.currentUserId);
+    if (user) {
+      void syncFirebaseAuth(user.email, user.password);
+      return;
+    }
+    void clearFirebaseAuth();
+  }, [hydrated, state.currentUserId, state.users]);
+
+  useEffect(() => {
     function onStorage(event: StorageEvent) {
       if ((event.key !== STORAGE_KEY && event.key !== LEGACY_KEY) || !event.newValue) return;
       const raw = event.newValue;
@@ -944,6 +955,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
     void revokeAdminSession();
+    void clearFirebaseAuth();
     dispatch({ type: "logout" });
   }, []);
   const register = useCallback((input: Parameters<StoreValue["register"]>[0]) => {

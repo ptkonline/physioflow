@@ -33,6 +33,10 @@ function LoginForm() {
         router.replace(claimed.admin ? next : "/unauthorized");
         return;
       }
+      if (claimed.admin) {
+        router.replace("/admin/dashboard");
+        return;
+      }
       const dest = next && !next.startsWith("/staff") ? next : homePath(user.role);
       if (user.role === "physio" && dest.startsWith("/patient")) {
         router.replace("/doctor/dashboard");

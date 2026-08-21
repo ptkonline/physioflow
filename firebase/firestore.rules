@@ -9,6 +9,15 @@ service cloud.firestore {
     function isPlatformAdmin() {
       return signedIn() && request.auth.uid == "REPLACE_WITH_ADMIN_FIREBASE_UID";
     }
+    function emailIs(value) {
+      return signedIn()
+        && request.auth.token.email is string
+        && value is string
+        && request.auth.token.email.lower() == value.lower();
+    }
+    function isChatMember(data) {
+      return emailIs(data.patientEmail) || emailIs(data.doctorEmail);
+    }
     function isParticipant(patientId, doctorId) {
       return signedIn() && (request.auth.uid == patientId || request.auth.uid == doctorId);
     }
@@ -31,23 +40,60 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read: if isParticipant(resource.data.patientId, resource.data.doctorId);
+      allow read: if isChatMember(resource.data);
       allow create: if signedIn()
         && request.resource.data.appointmentId == chatId
-        && isParticipant(request.resource.data.patientId, request.resource.data.doctorId);
-      allow update: if isParticipant(resource.data.patientId, resource.data.doctorId);
+        && request.resource.data.patientId is string
+        && request.resource.data.doctorId is string
+        && request.resource.data.patientEmail is string
+        && request.resource.data.doctorEmail is string
+        && isChatMember(request.resource.data);
+      allow update: if signedIn()
+        && request.resource.data.appointmentId == resource.data.appointmentId
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.doctorId == resource.data.doctorId
+        && (isChatMember(resource.data) || isChatMember(request.resource.data));
 
       match /messages/{messageId} {
-        allow read: if isParticipant(
-          get(/databases/$(database)/documents/chats/$(chatId)).data.patientId,
-          get(/databases/$(database)/documents/chats/$(chatId)).data.doctorId
+        allow read: if isChatMember(
+          get(/databases/$(database)/documents/chats/$(chatId)).data
         );
         allow create: if signedIn()
-          && request.resource.data.senderId == request.auth.uid
-          && isParticipant(
-            get(/databases/$(database)/documents/chats/$(chatId)).data.patientId,
-            get(/databases/$(database)/documents/chats/$(chatId)).data.doctorId
-          );
+          && isChatMember(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          && request.resource.data.senderId is string
+          && (
+            request.resource.data.senderId == get(/databases/$(database)/documents/chats/$(chatId)).data.patientId
+            || request.resource.data.senderId == get(/databases/$(database)/documents/chats/$(chatId)).data.doctorId
+          )
+          && request.resource.data.type is string;
+        allow update, delete: if false;
+      }
+    }
+
+    match /calls/{roomId} {
+      allow read: if isChatMember(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.patientId is string
+        && request.resource.data.doctorId is string
+        && request.resource.data.patientEmail is string
+        && request.resource.data.doctorEmail is string
+        && isChatMember(request.resource.data);
+      allow update: if signedIn()
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.doctorId == resource.data.doctorId
+        && request.resource.data.patientEmail == resource.data.patientEmail
+        && request.resource.data.doctorEmail == resource.data.doctorEmail
+        && isChatMember(resource.data);
+      allow delete: if isChatMember(resource.data);
+
+      match /signals/{signalId} {
+        allow read: if isChatMember(
+          get(/databases/$(database)/documents/calls/$(roomId)).data
+        );
+        allow create: if signedIn()
+          && isChatMember(get(/databases/$(database)/documents/calls/$(roomId)).data)
+          && request.resource.data.from is string
+          && request.resource.data.kind in ['offer', 'answer', 'ice'];
         allow update, delete: if false;
       }
     }
