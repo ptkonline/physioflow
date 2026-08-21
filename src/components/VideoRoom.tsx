@@ -95,18 +95,18 @@ export function VideoRoom({
       try {
         if (signal.kind === "offer" && !isCaller) {
           setStatus("Incoming call — connecting");
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit));
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
           await flushIce(pc);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           await sendCallSignal(room.roomId, localUserId, "answer", { type: answer.type, sdp: answer.sdp });
           setStatus("Connected");
         } else if (signal.kind === "answer" && isCaller) {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit));
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
           await flushIce(pc);
           setStatus("Connected");
         } else if (signal.kind === "ice") {
-          const candidate = signal.payload as RTCIceCandidateInit;
+          const candidate = signal.payload;
           if (!pc.remoteDescription) {
             pendingIce.current.push(candidate);
             return;

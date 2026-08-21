@@ -12,12 +12,19 @@ import { getFirebase } from "./firebase";
 
 export type SignalKind = "offer" | "answer" | "ice";
 
-export type CallSignal = {
-  id: string;
-  kind: SignalKind;
-  from: string;
-  payload: Record<string, unknown>;
-};
+export type CallSignal =
+  | {
+      id: string;
+      kind: "offer" | "answer";
+      from: string;
+      payload: RTCSessionDescriptionInit;
+    }
+  | {
+      id: string;
+      kind: "ice";
+      from: string;
+      payload: RTCIceCandidateInit;
+    };
 
 export type CallRoomMeta = {
   roomId: string;
@@ -62,8 +69,28 @@ export async function ensureCallRoom(meta: CallRoomMeta) {
   );
 }
 
-export async function sendCallSignal(roomId: string, from: string, kind: SignalKind, payload: Record<string, unknown>) {
-  const body: CallSignal = { id: crypto.randomUUID(), kind, from, payload };
+export async function sendCallSignal(
+  roomId: string,
+  from: string,
+  kind: "offer" | "answer",
+  payload: RTCSessionDescriptionInit,
+): Promise<void>;
+export async function sendCallSignal(
+  roomId: string,
+  from: string,
+  kind: "ice",
+  payload: RTCIceCandidateInit,
+): Promise<void>;
+export async function sendCallSignal(
+  roomId: string,
+  from: string,
+  kind: SignalKind,
+  payload: RTCSessionDescriptionInit | RTCIceCandidateInit,
+) {
+  const body: CallSignal =
+    kind === "ice"
+      ? { id: crypto.randomUUID(), kind, from, payload: payload as RTCIceCandidateInit }
+      : { id: crypto.randomUUID(), kind, from, payload: payload as RTCSessionDescriptionInit };
   channel(roomId)?.postMessage(body);
   if (!isFirebaseConfigured()) return;
   const { db } = getFirebase();
@@ -97,11 +124,22 @@ export function subscribeCallSignals(
       snap.docChanges().forEach((change) => {
         if (change.type !== "added") return;
         const data = change.doc.data();
+        const kind = data.kind as SignalKind;
+        const from = String(data.from ?? "");
+        if (kind === "ice") {
+          onSignal({
+            id: change.doc.id,
+            kind,
+            from,
+            payload: (data.payload as RTCIceCandidateInit) ?? {},
+          });
+          return;
+        }
         onSignal({
           id: change.doc.id,
-          kind: data.kind as SignalKind,
-          from: String(data.from ?? ""),
-          payload: (data.payload as Record<string, unknown>) ?? {},
+          kind,
+          from,
+          payload: (data.payload as RTCSessionDescriptionInit) ?? { type: "offer" },
         });
       });
     },
