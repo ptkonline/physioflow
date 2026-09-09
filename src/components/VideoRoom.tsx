@@ -9,7 +9,7 @@ import {
   type CallSignal,
 } from "@/lib/webrtc-signaling";
 import { isFirebaseConfigured } from "@/lib/firebase-config";
-import { Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
+import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 function mediaErrorMessage(err: unknown) {
@@ -37,6 +37,7 @@ export function VideoRoom({
   isCaller,
   onLeave,
   onJoin,
+  onMissed,
 }: {
   room: CallRoomMeta;
   localUserId: string;
@@ -45,6 +46,7 @@ export function VideoRoom({
   isCaller: boolean;
   onLeave: () => void;
   onJoin?: () => void;
+  onMissed?: () => void;
 }) {
   const localRef = useRef<HTMLVideoElement>(null);
   const remoteRef = useRef<HTMLVideoElement>(null);
@@ -63,6 +65,10 @@ export function VideoRoom({
   const [camOff, setCamOff] = useState(false);
   const [status, setStatus] = useState("Waiting to join");
   const [error, setError] = useState<string | null>(null);
+  const [audioOnly, setAudioOnly] = useState(false);
+  const audioOnlyRef = useRef(false);
+  const remoteLiveRef = useRef(false);
+  const [turnReady, setTurnReady] = useState<boolean | null>(null);
 
   const attachRemote = useCallback((stream: MediaStream) => {
     const node = remoteRef.current;
@@ -70,6 +76,7 @@ export function VideoRoom({
     node.srcObject = stream;
     void node.play().catch(() => undefined);
     setRemoteLive(true);
+    remoteLiveRef.current = true;
   }, []);
 
   const flushIce = useCallback(async (pc: RTCPeerConnection) => {
@@ -89,6 +96,15 @@ export function VideoRoom({
       if (signal.from === localUserId) return;
       if (seen.current.has(signal.id)) return;
       seen.current.add(signal.id);
+      if (signal.kind === "missed") {
+        onMissed?.();
+        setStatus("Missed call");
+        return;
+      }
+      if (signal.kind === "hangup") {
+        setStatus("The other person left the call");
+        return;
+      }
       const pc = pcRef.current;
       if (!pc) return;
 
@@ -117,7 +133,7 @@ export function VideoRoom({
         setError(err instanceof Error ? err.message : "Signaling failed. Rejoin the visit.");
       }
     },
-    [flushIce, isCaller, localUserId, room.roomId],
+    [flushIce, isCaller, localUserId, onMissed, room.roomId],
   );
 
   handleRef.current = handleSignal;
@@ -131,11 +147,14 @@ export function VideoRoom({
     };
   }, []);
 
-  async function join() {
+  async function join(voiceOnly = false) {
     setError(null);
+    audioOnlyRef.current = voiceOnly;
+    setAudioOnly(voiceOnly);
+    setCamOff(voiceOnly);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: voiceOnly ? false : { facingMode: "user" },
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
@@ -144,7 +163,17 @@ export function VideoRoom({
         await localRef.current.play().catch(() => undefined);
       }
 
-      const pc = new RTCPeerConnection(rtcConfig());
+      let config = rtcConfig();
+      try {
+        const ice = await fetch("/api/ice");
+        const body = (await ice.json()) as { iceServers?: RTCIceServer[]; turnReady?: boolean };
+        if (body.iceServers?.length) config = { iceServers: body.iceServers, iceCandidatePoolSize: 8 };
+        setTurnReady(Boolean(body.turnReady));
+      } catch {
+        setTurnReady(false);
+      }
+
+      const pc = new RTCPeerConnection(config);
       pcRef.current = pc;
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -194,7 +223,13 @@ export function VideoRoom({
     }
   }
 
-  function leave() {
+  async function leave() {
+    const missed = isCaller && !remoteLiveRef.current && live;
+    try {
+      await sendCallSignal(room.roomId, localUserId, missed ? "missed" : "hangup");
+    } catch {
+      /* signaling optional on hangup */
+    }
     unsubRef.current();
     unsubRef.current = () => {};
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -203,6 +238,8 @@ export function VideoRoom({
     pcRef.current = null;
     setLive(false);
     setRemoteLive(false);
+    remoteLiveRef.current = false;
+    if (missed) onMissed?.();
     onLeave();
   }
 
@@ -229,6 +266,12 @@ export function VideoRoom({
         <p className="text-sm text-amber">
           Firebase is not configured. Signaling stays in this browser only. Add NEXT_PUBLIC_FIREBASE_* keys for a
           two-device call.
+        </p>
+      )}
+      {turnReady === false && (
+        <p className="text-sm text-amber">
+          TURN is not configured. Some mobile networks will fail. Set TURN_URL, TURN_USERNAME, and TURN_CREDENTIAL on
+          the server (Metered or Twilio).
         </p>
       )}
       {error ? <p className="text-rose">{error}</p> : null}
@@ -264,18 +307,24 @@ export function VideoRoom({
       </div>
       <div className="flex flex-wrap gap-2">
         {!live ? (
-          <button type="button" className="btn btn-primary" onClick={() => void join()}>
-            <Video size={18} /> Join visit
-          </button>
+          <>
+            <button type="button" className="btn btn-primary" onClick={() => void join(false)}>
+              <Video size={18} /> Join video
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => void join(true)}>
+              <Phone size={18} /> Voice only
+            </button>
+          </>
         ) : (
           <>
             <button type="button" className="btn btn-ghost" onClick={toggleMute}>
               {muted ? <MicOff size={18} /> : <Mic size={18} />} {muted ? "Unmute" : "Mute"}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={toggleCam}>
-              {camOff ? <VideoOff size={18} /> : <Video size={18} />} {camOff ? "Camera on" : "Camera off"}
+            <button type="button" className="btn btn-ghost" onClick={toggleCam} disabled={audioOnly}>
+              {camOff || audioOnly ? <VideoOff size={18} /> : <Video size={18} />}{" "}
+              {audioOnly ? "Voice call" : camOff ? "Camera on" : "Camera off"}
             </button>
-            <button type="button" className="btn bg-rose text-white" onClick={leave}>
+            <button type="button" className="btn bg-rose text-white" onClick={() => void leave()}>
               <PhoneOff size={18} /> End visit
             </button>
           </>

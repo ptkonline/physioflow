@@ -27,33 +27,72 @@ export default function RegisterPage() {
   const [medicalHistory, setMedicalHistory] = useState("");
   const [hipaa, setHipaa] = useState(false);
   const [gdpr, setGdpr] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [challenge, setChallenge] = useState("");
+  const [awaitingOtp, setAwaitingOtp] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  function onPatientSubmit(e: FormEvent) {
+  async function sendOtp() {
+    const res = await fetch("/api/auth/otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, purpose: "register" }),
+    });
+    const body = (await res.json()) as { error?: string; challengeToken?: string };
+    if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
+    setChallenge(body.challengeToken);
+    setAwaitingOtp(true);
+  }
+
+  async function verifyOtp() {
+    const res = await fetch("/api/auth/otp/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code: otp, challengeToken: challenge }),
+    });
+    const body = (await res.json()) as { error?: string; ok?: boolean };
+    if (!res.ok || !body.ok) throw new Error(body.error || "That code is not valid.");
+  }
+
+  async function onPatientSubmit(e: FormEvent) {
     e.preventDefault();
     if (!hipaa || !gdpr) {
       setError("Please accept both privacy statements to continue.");
       return;
     }
-    const ok = register({
-      name,
-      email,
-      password,
-      role: "patient",
-      phone,
-      condition,
-      goal,
-      dateOfBirth,
-      address,
-      emergencyName,
-      emergencyPhone,
-      medicalHistory,
-    });
-    if (!ok) {
-      setError("That email is already in use.");
-      return;
+    setBusy(true);
+    setError("");
+    try {
+      if (!awaitingOtp) {
+        await sendOtp();
+        return;
+      }
+      await verifyOtp();
+      const ok = await register({
+        name,
+        email,
+        password,
+        role: "patient",
+        phone,
+        condition,
+        goal,
+        dateOfBirth,
+        address,
+        emergencyName,
+        emergencyPhone,
+        medicalHistory,
+      });
+      if (!ok) {
+        setError("That email is already in use.");
+        return;
+      }
+      router.replace(homePath("patient"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create the profile.");
+    } finally {
+      setBusy(false);
     }
-    router.replace(homePath("patient"));
   }
 
   return (
@@ -157,9 +196,23 @@ export default function RegisterPage() {
               <input type="checkbox" className="mt-1 h-5 w-5" checked={gdpr} onChange={(e) => setGdpr(e.target.checked)} />
               <span>I agree to GDPR-style processing and understand I can export or delete my data.</span>
             </label>
+            {awaitingOtp && (
+              <label className="block space-y-1">
+                <span>Email verification code</span>
+                <input
+                  className="field tracking-[0.3em]"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                />
+              </label>
+            )}
             {error && <p className="text-rose">{error}</p>}
-            <button className="btn btn-primary w-full" type="submit">
-              Create my profile
+            <button className="btn btn-primary w-full" type="submit" disabled={busy}>
+              {busy ? "Please wait…" : awaitingOtp ? "Verify and create profile" : "Send verification code"}
             </button>
           </form>
         )}

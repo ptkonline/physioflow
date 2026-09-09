@@ -1,5 +1,5 @@
 import { parseDraft } from "@/lib/server/payment-notify";
-import { savePaymentOrder } from "@/lib/server/payment-orders";
+import { persistPaymentToken, savePaymentOrder } from "@/lib/server/payment-orders";
 import { createRazorpayOrder, isRazorpayConfigured, razorpayKeyId } from "@/lib/server/razorpay";
 import { quoteFees } from "@/lib/pricing";
 import { NextRequest } from "next/server";
@@ -25,18 +25,20 @@ export async function POST(request: NextRequest) {
 
   if (!isRazorpayConfigured()) {
     const orderId = `demo_order_${receipt}`;
-    savePaymentOrder({
+    const record = {
       orderId,
       receipt,
       quote,
       draft,
-      paymentStatus: "pending",
-    });
+      paymentStatus: "pending" as const,
+    };
+    await savePaymentOrder(record);
     return Response.json({
       demo: true,
       orderId,
       keyId: "",
       quote,
+      persistenceToken: await persistPaymentToken(record),
     });
   }
 
@@ -51,18 +53,20 @@ export async function POST(request: NextRequest) {
         scheduledAt: draft.scheduledAt,
       },
     });
-    savePaymentOrder({
+    const record = {
       orderId,
       receipt,
       quote,
       draft,
-      paymentStatus: "pending",
-    });
+      paymentStatus: "pending" as const,
+    };
+    await savePaymentOrder(record);
     return Response.json({
       demo: false,
       orderId,
       keyId: razorpayKeyId(),
       quote,
+      persistenceToken: await persistPaymentToken(record),
     });
   } catch (err) {
     return Response.json(

@@ -15,9 +15,9 @@ export function DoctorForm({ onCreated }: { onCreated?: () => void }) {
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const created = addDoctor({ name, email, password, clinicId, specialty, phone, bio });
+    const created = await addDoctor({ name, email, password, clinicId, specialty, phone, bio });
     if (!created) {
       setOk("");
       setError("That email is already in the clinic directory.");

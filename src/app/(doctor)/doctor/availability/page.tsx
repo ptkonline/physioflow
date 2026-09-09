@@ -1,5 +1,6 @@
 "use client";
 
+import { SlotCalendar } from "@/components/SlotCalendar";
 import { DoctorPracticeForm } from "@/components/doctor/DoctorPracticeForm";
 import { DEFAULT_HOURS, type WeekHours } from "@/lib/types";
 import { useCurrentUser, useStore } from "@/lib/store";
@@ -86,6 +87,12 @@ export default function DoctorHours() {
       {saved && <p className="text-teal-dark">Patients now see these open slots.</p>}
     </form>
     <DoctorPracticeForm />
+    {user && (
+      <div className="card p-5">
+        <h2 className="text-xl font-semibold">How patients see your calendar</h2>
+        <SlotCalendar physioId={user.id} state={state} value="" onChange={() => undefined} />
+      </div>
+    )}
     </div>
   );
 }

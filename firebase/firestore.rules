@@ -99,7 +99,7 @@ service cloud.firestore {
         allow create: if signedIn()
           && isChatMember(get(/databases/$(database)/documents/calls/$(roomId)).data)
           && request.resource.data.from is string
-          && request.resource.data.kind in ['offer', 'answer', 'ice'];
+          && request.resource.data.kind in ['offer', 'answer', 'ice', 'hangup', 'missed'];
         allow update, delete: if false;
       }
     }
@@ -131,11 +131,36 @@ service cloud.firestore {
     }
 
     match /bookings/{bookingId} {
-      allow read: if isParticipant(resource.data.patientId, resource.data.physioId);
+      allow read: if signedIn() && (
+        isParticipant(resource.data.patientId, resource.data.physioId)
+        || emailIs(resource.data.patientEmail)
+        || emailIs(resource.data.doctorEmail)
+      );
       allow create: if signedIn()
-        && request.resource.data.paymentStatus == "success";
+        && request.resource.data.paymentStatus == "success"
+        && (emailIs(request.resource.data.patientEmail) || request.auth.uid == request.resource.data.patientId);
       allow update: if signedIn()
-        && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.physioId);
+        && (request.auth.uid == resource.data.patientId
+          || request.auth.uid == resource.data.physioId
+          || emailIs(resource.data.patientEmail)
+          || emailIs(resource.data.doctorEmail));
+    }
+
+    match /payments/{orderId} {
+      allow read: if signedIn() && (
+        request.auth.uid == resource.data.patientId
+        || request.auth.uid == resource.data.doctorId
+        || emailIs(resource.data.patientEmail)
+      );
+      allow create, update: if signedIn()
+        && request.resource.data.paymentStatus == "success"
+        && (emailIs(request.resource.data.patientEmail) || request.auth.uid == request.resource.data.patientId);
+      allow delete: if false;
+    }
+
+    match /reminder_dispatches/{id} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
     }
 
     match /payment_orders/{orderId} {

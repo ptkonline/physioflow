@@ -4,16 +4,9 @@ import type { DoctorRegisterValues } from "./doctor-register-schema";
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
 import { compressImage, fileToDataUrl } from "./image";
+import { hashPassword } from "./password";
 
 const LOCAL_KEY = "physioflow.doctors_pending_verification";
-
-async function sha256(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 function fileMeta(file: File) {
   return { name: file.name, type: file.type, size: file.size };
@@ -46,7 +39,7 @@ async function submitLocal(values: DoctorRegisterValues) {
     name: values.name,
     email: values.email.toLowerCase(),
     phone: values.phone,
-    passwordHash: await sha256(values.password),
+    passwordHash: await hashPassword(values.password),
     degree: values.degree,
     specialization: values.specialization,
     registrationNumber: values.registrationNumber,
@@ -118,7 +111,7 @@ export async function submitDoctorApplication(values: DoctorRegisterValues) {
     name: values.name,
     email: values.email.toLowerCase(),
     phone: values.phone,
-    passwordHash: await sha256(values.password),
+    passwordHash: await hashPassword(values.password),
     degree: values.degree,
     specialization: values.specialization,
     registrationNumber: values.registrationNumber,

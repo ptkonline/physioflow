@@ -6,7 +6,7 @@ import { useCurrentUser, useStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
 
 export function VideoCall({ consultId }: { consultId: string }) {
-  const { state, setConsultStatus } = useStore();
+  const { state, setConsultStatus, addNotification } = useStore();
   const { user } = useCurrentUser();
   const router = useRouter();
 
@@ -46,6 +46,16 @@ export function VideoCall({ consultId }: { consultId: string }) {
         remoteName={other?.name ?? "the other participant"}
         isCaller={isCaller}
         onJoin={() => setConsultStatus(consult.id, "live")}
+        onMissed={() => {
+          const otherId = user.id === consult.patientId ? consult.physioId : consult.patientId;
+          addNotification({
+            userId: otherId,
+            title: "Missed call",
+            body: `${user.name} tried to reach you for ${consult.topic}.`,
+            type: "consult",
+            href: `/consult/${consult.id}`,
+          });
+        }}
         onLeave={() => {
           setConsultStatus(consult.id, "completed");
           router.push(user.role === "physio" ? "/doctor/consults" : "/patient/consults");

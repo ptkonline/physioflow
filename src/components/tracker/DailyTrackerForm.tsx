@@ -2,6 +2,7 @@
 
 import { todayKey } from "@/lib/dates";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { enqueueOffline } from "@/lib/offline-idb";
 import { useTranslations } from "next-intl";
 import { FormEvent, useMemo, useState } from "react";
 
@@ -28,7 +29,7 @@ export function DailyTrackerForm() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    upsertDailyLog({
+    const payload = {
       patientId,
       appointmentId: booking?.id ?? "",
       doctorId: booking?.physioId || profile?.assignedPhysioId || "",
@@ -36,7 +37,18 @@ export function DailyTrackerForm() {
       didExercises,
       painLevel,
       note: note.trim(),
-    });
+    };
+    if (!navigator.onLine) {
+      void enqueueOffline({
+        id: crypto.randomUUID(),
+        kind: "log",
+        createdAt: new Date().toISOString(),
+        payload,
+      });
+      setSaved(true);
+      return;
+    }
+    upsertDailyLog(payload);
     setSaved(true);
   }
 

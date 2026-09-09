@@ -30,17 +30,17 @@ export async function POST(request: NextRequest) {
   }
 
   if (event.event === "payment.failed") {
-    markOrderFailed(orderId);
+    await markOrderFailed(orderId);
     return Response.json({ ok: true });
   }
 
   if (event.event === "payment.captured" || event.event === "order.paid") {
-    const existing = getPaymentOrder(orderId);
+    const existing = await getPaymentOrder(orderId);
     const paymentId = payment?.id ?? existing?.paymentId ?? `wh_${orderId}`;
     if (existing?.paymentStatus === "success") {
       return Response.json({ ok: true, idempotent: true });
     }
-    const paid = markOrderPaid(orderId, paymentId, payment?.method);
+    const paid = await markOrderPaid(orderId, paymentId, payment?.method);
     if (paid && paid.paymentStatus === "success") {
       await notifyDoctorOfPayment({
         doctorEmail: paid.draft.doctorEmail,

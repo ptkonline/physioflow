@@ -33,7 +33,8 @@
     "invalid": "ईमेल या पासवर्ड सही नहीं है।",
     "patientPortal": "मरीज़ पोर्टल खोलें",
     "doctorJames": "डॉक्टर पोर्टल (जेम्स)",
-    "doctorAisha": "डॉक्टर पोर्टल (आइशा)"
+    "doctorAisha": "डॉक्टर पोर्टल (आइशा)",
+    "forgotPassword": "पासवर्ड भूल गए?"
   },
   "tracker": {
     "title": "दैनिक जाँच",

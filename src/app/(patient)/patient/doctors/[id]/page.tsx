@@ -4,14 +4,14 @@ import { DoctorAvatar } from "@/components/shared/DoctorAvatar";
 import { VerifiedBadge } from "@/components/shared/VerifiedBadge";
 import { MapDirectionButton } from "@/components/maps/MapDirectionButton";
 import { PaymentButton } from "@/components/payment/PaymentButton";
-import { formatSlot, openSlots } from "@/lib/availability";
+import { SlotCalendar } from "@/components/SlotCalendar";
 import { clinicPoint } from "@/lib/geo";
 import { doctorPricing, formatInr } from "@/lib/pricing";
 import { averageRating } from "@/lib/reviews";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { VisitMode } from "@/lib/care-types";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 export default function DoctorProfilePage() {
   const params = useParams<{ id: string }>();
@@ -20,7 +20,6 @@ export default function DoctorProfilePage() {
   const router = useRouter();
   const doctor = state.users.find((u) => u.id === params.id && u.role === "physio");
   const docProfile = state.doctors.find((d) => d.userId === params.id);
-  const slots = useMemo(() => (doctor ? openSlots(doctor.id, state, 12) : []), [doctor, state]);
   const [slot, setSlot] = useState("");
   const [reason, setReason] = useState(profile?.goal ?? "");
   const [notes, setNotes] = useState("");
@@ -98,17 +97,13 @@ export default function DoctorProfilePage() {
           {mode === "offline" && pin && <p className="text-sm text-muted">Clinic: {pin.address}</p>}
           {mode === "online" && <p className="text-sm text-muted">You will join a video room after payment.</p>}
         </fieldset>
-        <label className="block space-y-1">
-          <span>Open slot</span>
-          <select className="field" value={slot} onChange={(e) => setSlot(e.target.value)} required>
-            <option value="">Select a time</option>
-            {slots.map((iso) => (
-              <option key={iso} value={iso}>
-                {mode === "offline" ? "Clinic" : "Online"} · {formatSlot(iso)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SlotCalendar
+          physioId={doctor.id}
+          state={state}
+          value={slot}
+          onChange={setSlot}
+          modeLabel={mode === "offline" ? "Clinic" : "Online"}
+        />
         <label className="block space-y-1">
           <span>Reason for visit</span>
           <input className="field" value={reason} onChange={(e) => setReason(e.target.value)} required />

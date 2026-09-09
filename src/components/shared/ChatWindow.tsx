@@ -4,6 +4,7 @@ import { VideoPlayer } from "@/components/videos/VideoPlayer";
 import { ensureChatRoom, sendChatMessage, subscribeMessages } from "@/lib/chat";
 import type { ChatMessage, LibraryVideo } from "@/lib/care-types";
 import { subscribeDoctorVideos } from "@/lib/video-library";
+import { enqueueOffline } from "@/lib/offline-idb";
 import { ImagePlus, Library, Send } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
@@ -65,6 +66,26 @@ export function ChatWindow({
     if (!file && !video && !text.trim()) return;
     setBusy(true);
     try {
+      if (!navigator.onLine) {
+        await enqueueOffline({
+          id: crypto.randomUUID(),
+          kind: "chat",
+          createdAt: new Date().toISOString(),
+          payload: {
+            appointmentId,
+            senderId: currentUserId,
+            text: video ? text || `Exercise: ${video.title}` : text,
+            patientId,
+            doctorId,
+            patientEmail,
+            doctorEmail,
+          },
+        });
+        setText("");
+        setPicker(false);
+        setError("Saved offline. It will send when you are back online.");
+        return;
+      }
       await sendChatMessage({
         appointmentId,
         senderId: currentUserId,
@@ -76,6 +97,23 @@ export function ChatWindow({
       });
       setText("");
       setPicker(false);
+    } catch {
+      await enqueueOffline({
+        id: crypto.randomUUID(),
+        kind: "chat",
+        createdAt: new Date().toISOString(),
+        payload: {
+          appointmentId,
+          senderId: currentUserId,
+          text,
+          patientId,
+          doctorId,
+          patientEmail,
+          doctorEmail,
+        },
+      });
+      setText("");
+      setError("Saved offline. It will send when you are back online.");
     } finally {
       setBusy(false);
     }

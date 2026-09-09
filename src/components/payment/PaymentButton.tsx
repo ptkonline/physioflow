@@ -79,11 +79,13 @@ export function PaymentButton({
         orderId?: string;
         keyId?: string;
         quote?: FeeQuote;
+        persistenceToken?: string;
       };
       if (!created.ok || !order.orderId || !order.quote) {
         throw new Error(order.error || "Could not start payment.");
       }
       setQuote(order.quote);
+      const persistenceToken = order.persistenceToken;
 
       if (order.demo) {
         const verified = await fetch("/api/payment/verify", {
@@ -94,6 +96,7 @@ export function PaymentButton({
             paymentId: `demo_pay_${order.orderId}`,
             signature: "demo",
             paymentMethod: "demo",
+            persistenceToken,
           }),
         });
         const body = (await verified.json()) as { error?: string; order?: { paidAt?: string; paymentId?: string; quote: FeeQuote } };
@@ -132,6 +135,7 @@ export function PaymentButton({
               paymentId: response.razorpay_payment_id,
               signature: response.razorpay_signature,
               paymentMethod: "razorpay",
+              persistenceToken,
             }),
           });
           const body = (await verified.json()) as {

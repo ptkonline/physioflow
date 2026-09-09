@@ -14,8 +14,9 @@
  * bookings/{id}
  *   mode: online | offline, finalPrice, clinicAddress, meetingLink
  *
- * payment_orders are stored server-side (process memory / webhook idempotency),
- * not writable from the client.
+ * payment_orders — server/admin only (signed token + optional Admin SDK)
+ * payments/{orderId} — client copy after successful checkout
+ * reminder_dispatches/{id}
  *
  * Storage:
  *   videos/{doctorId}/{videoId}/source|thumb

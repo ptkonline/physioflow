@@ -40,6 +40,9 @@ const DAYS = [
 export function DoctorRegisterForm() {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [otp, setOtp] = useState("");
+  const [challenge, setChallenge] = useState("");
+  const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const form = useForm<DoctorRegisterValues>({
     resolver: zodResolver(doctorRegisterSchema),
@@ -85,6 +88,25 @@ export function DoctorRegisterForm() {
   async function onSubmit(values: DoctorRegisterValues) {
     setSubmitError("");
     try {
+      if (!awaitingOtp) {
+        const res = await fetch("/api/auth/otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: values.email, purpose: "register" }),
+        });
+        const body = (await res.json()) as { error?: string; challengeToken?: string };
+        if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
+        setChallenge(body.challengeToken);
+        setAwaitingOtp(true);
+        return;
+      }
+      const verified = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: values.email, code: otp, challengeToken: challenge }),
+      });
+      const body = (await verified.json()) as { error?: string; ok?: boolean };
+      if (!verified.ok || !body.ok) throw new Error(body.error || "That code is not valid.");
       const { submitDoctorApplication } = await import("@/lib/submit-doctor-application");
       await submitDoctorApplication(values);
       router.replace("/register/pending");
@@ -275,6 +297,20 @@ export function DoctorRegisterForm() {
         </div>
       )}
 
+      {awaitingOtp && (
+        <label className="block space-y-1">
+          <span>Email verification code</span>
+          <input
+            className="field tracking-[0.3em]"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            required
+          />
+        </label>
+      )}
       {submitError && <p className="text-rose">{submitError}</p>}
 
       <div className="flex gap-3">
@@ -289,7 +325,7 @@ export function DoctorRegisterForm() {
           </button>
         ) : (
           <button className="btn btn-primary flex-1" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting…" : "Submit for verification"}
+            {isSubmitting ? "Please wait…" : awaitingOtp ? "Verify and submit" : "Send code and submit"}
           </button>
         )}
       </div>

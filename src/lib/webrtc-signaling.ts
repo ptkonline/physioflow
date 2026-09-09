@@ -10,7 +10,7 @@ import {
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
 
-export type SignalKind = "offer" | "answer" | "ice";
+export type SignalKind = "offer" | "answer" | "ice" | "hangup" | "missed";
 
 export type CallSignal =
   | {
@@ -24,6 +24,12 @@ export type CallSignal =
       kind: "ice";
       from: string;
       payload: RTCIceCandidateInit;
+    }
+  | {
+      id: string;
+      kind: "hangup" | "missed";
+      from: string;
+      payload: Record<string, never>;
     };
 
 export type CallRoomMeta = {
@@ -84,13 +90,21 @@ export async function sendCallSignal(
 export async function sendCallSignal(
   roomId: string,
   from: string,
+  kind: "hangup" | "missed",
+  payload?: Record<string, never>,
+): Promise<void>;
+export async function sendCallSignal(
+  roomId: string,
+  from: string,
   kind: SignalKind,
-  payload: RTCSessionDescriptionInit | RTCIceCandidateInit,
+  payload?: RTCSessionDescriptionInit | RTCIceCandidateInit | Record<string, never>,
 ) {
   const body: CallSignal =
     kind === "ice"
-      ? { id: crypto.randomUUID(), kind, from, payload: payload as RTCIceCandidateInit }
-      : { id: crypto.randomUUID(), kind, from, payload: payload as RTCSessionDescriptionInit };
+      ? { id: crypto.randomUUID(), kind, from, payload: (payload as RTCIceCandidateInit) ?? {} }
+      : kind === "hangup" || kind === "missed"
+        ? { id: crypto.randomUUID(), kind, from, payload: {} }
+        : { id: crypto.randomUUID(), kind, from, payload: (payload as RTCSessionDescriptionInit) ?? { type: "offer" } };
   channel(roomId)?.postMessage(body);
   if (!isFirebaseConfigured()) return;
   const { db } = getFirebase();
@@ -133,6 +147,10 @@ export function subscribeCallSignals(
             from,
             payload: (data.payload as RTCIceCandidateInit) ?? {},
           });
+          return;
+        }
+        if (kind === "hangup" || kind === "missed") {
+          onSignal({ id: change.doc.id, kind, from, payload: {} });
           return;
         }
         onSignal({

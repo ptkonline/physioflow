@@ -33,10 +33,6 @@ function LoginForm() {
         router.replace(claimed.admin ? next : "/unauthorized");
         return;
       }
-      if (claimed.admin) {
-        router.replace("/admin/dashboard");
-        return;
-      }
       const dest = next && !next.startsWith("/staff") ? next : homePath(user.role);
       if (user.role === "physio" && dest.startsWith("/patient")) {
         router.replace("/doctor/dashboard");
@@ -55,14 +51,16 @@ function LoginForm() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const found: User | false = login(email.trim(), password);
-    setError(found ? "" : t("invalid"));
+    void (async () => {
+      const found: User | false = await login(email.trim(), password);
+      setError(found ? "" : t("invalid"));
+    })();
   }
 
-  function enter(nextEmail: string) {
+  async function enter(nextEmail: string) {
     setEmail(nextEmail);
     setPassword("demo123");
-    const found = login(nextEmail, "demo123");
+    const found = await login(nextEmail, "demo123");
     if (!found) setError("Demo account is not ready yet. Wait a moment and try again.");
   }
 
@@ -89,17 +87,20 @@ function LoginForm() {
             {tc("continue")}
           </button>
           <div className="flex flex-col gap-2 text-sm">
-            <button type="button" className="btn btn-ghost" onClick={() => enter("maya@demo.physio")}>
+            <button type="button" className="btn btn-ghost" onClick={() => void enter("maya@demo.physio")}>
               {t("patientPortal")}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => enter("james@demo.physio")}>
+            <button type="button" className="btn btn-ghost" onClick={() => void enter("james@demo.physio")}>
               {t("doctorJames")}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => enter("aisha@demo.physio")}>
+            <button type="button" className="btn btn-ghost" onClick={() => void enter("aisha@demo.physio")}>
               {t("doctorAisha")}
             </button>
           </div>
         </form>
+        <p className="text-center text-muted">
+          <Link href="/forgot-password">Forgot password?</Link>
+        </p>
         <p className="text-center text-muted">
           New here? <Link href="/register">Create an account</Link>
         </p>

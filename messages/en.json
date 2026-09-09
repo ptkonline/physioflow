@@ -33,7 +33,8 @@
     "invalid": "Email or password is not correct.",
     "patientPortal": "Enter patient portal",
     "doctorJames": "Enter doctor portal (James)",
-    "doctorAisha": "Enter doctor portal (Aisha)"
+    "doctorAisha": "Enter doctor portal (Aisha)",
+    "forgotPassword": "Forgot password?"
   },
   "tracker": {
     "title": "Daily check-in",

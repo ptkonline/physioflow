@@ -1,6 +1,8 @@
 import {
   createUserWithEmailAndPassword,
   getAuth,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   type Auth,
@@ -17,7 +19,11 @@ export function getFirebaseAuth() {
   return auth;
 }
 
-export async function syncFirebaseAuth(email: string, password: string): Promise<User | null> {
+export async function syncFirebaseAuth(
+  email: string,
+  password: string,
+  options: { createIfMissing?: boolean } = { createIfMissing: true },
+): Promise<User | null> {
   const instance = getFirebaseAuth();
   if (!instance) return null;
   const normalized = email.trim().toLowerCase();
@@ -30,12 +36,23 @@ export async function syncFirebaseAuth(email: string, password: string): Promise
   try {
     return (await signInWithEmailAndPassword(instance, normalized, password)).user;
   } catch {
+    if (!options.createIfMissing) return null;
     try {
-      return (await createUserWithEmailAndPassword(instance, normalized, password)).user;
+      const created = await createUserWithEmailAndPassword(instance, normalized, password);
+      await sendEmailVerification(created.user).catch(() => undefined);
+      return created.user;
     } catch {
       return null;
     }
   }
+}
+
+export async function requestPasswordReset(email: string) {
+  const instance = getFirebaseAuth();
+  if (!instance) {
+    throw new Error("Firebase Auth is not configured. Add NEXT_PUBLIC_FIREBASE_* keys.");
+  }
+  await sendPasswordResetEmail(instance, email.trim().toLowerCase());
 }
 
 export async function clearFirebaseAuth() {

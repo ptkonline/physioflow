@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     paymentId?: string;
     signature?: string;
     paymentMethod?: string;
+    persistenceToken?: string;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
 
   const orderId = String(body.orderId ?? "");
   const paymentId = String(body.paymentId ?? "");
-  const record = getPaymentOrder(orderId);
+  const record = await getPaymentOrder(orderId, body.persistenceToken);
   if (!record) {
     return Response.json({ error: "Unknown order. Start checkout again." }, { status: 404 });
   }
@@ -39,7 +40,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const paid = markOrderPaid(orderId, paymentId || `demo_pay_${orderId}`, body.paymentMethod ?? (demo ? "demo" : "razorpay"));
+  const paid = await markOrderPaid(
+    orderId,
+    paymentId || `demo_pay_${orderId}`,
+    body.paymentMethod ?? (demo ? "demo" : "razorpay"),
+    body.persistenceToken,
+  );
   if (!paid) {
     return Response.json({ error: "Could not record payment." }, { status: 500 });
   }

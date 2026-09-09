@@ -31,6 +31,8 @@ import type {
 import { DEFAULT_HOURS } from "./types";
 import type { DailyLog, Prescription, Review } from "./care-types";
 import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
+import { hashPassword, isPasswordHashed, stripUserSecrets, verifyPassword } from "./password";
+import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
 import { revokeAdminSession } from "./admin-actions";
 import { clearAuthCookies, setAuthCookies } from "./auth-session";
 
@@ -56,13 +58,16 @@ function readVaultSync(): AppState | null {
 
 type Action =
   | { type: "hydrate"; state: AppState }
-  | { type: "login"; email: string; password: string }
+  | { type: "login"; userId: string }
+  | { type: "setPasswordHash"; userId: string; passwordHash: string }
+  | { type: "mergeBookings"; bookings: Booking[] }
   | { type: "logout" }
   | {
       type: "register";
       name: string;
       email: string;
-      password: string;
+      password?: string;
+      passwordHash?: string;
       role: Role;
       phone?: string;
       condition?: Condition;
@@ -123,7 +128,8 @@ type Action =
       type: "addDoctor";
       name: string;
       email: string;
-      password: string;
+      password?: string;
+      passwordHash?: string;
       clinicId: string;
       specialty: string;
       phone: string;
@@ -206,17 +212,9 @@ function reducer(state: AppState, action: Action): AppState {
     case "login": {
       let users = state.users;
       let profiles = state.profiles;
-      let user = users.find(
-        (u) =>
-          u.email.toLowerCase() === action.email.toLowerCase() &&
-          u.password === action.password,
-      );
+      let user = users.find((u) => u.id === action.userId);
       if (!user) {
-        user = seedState.users.find(
-          (u) =>
-            u.email.toLowerCase() === action.email.toLowerCase() &&
-            u.password === action.password,
-        );
+        user = seedState.users.find((u) => u.id === action.userId);
         if (user) {
           const seeded = user;
           users = [...users, seeded];
@@ -242,6 +240,18 @@ function reducer(state: AppState, action: Action): AppState {
         ],
       };
     }
+    case "setPasswordHash":
+      return {
+        ...state,
+        users: state.users.map((u) =>
+          u.id === action.userId ? { ...u, passwordHash: action.passwordHash, password: "" } : u,
+        ),
+      };
+    case "mergeBookings": {
+      const map = new Map((state.bookings ?? []).map((b) => [b.id, b]));
+      for (const booking of action.bookings) map.set(booking.id, { ...map.get(booking.id), ...booking });
+      return { ...state, bookings: [...map.values()] };
+    }
     case "logout":
       return { ...state, currentUserId: null };
     case "register": {
@@ -253,7 +263,8 @@ function reducer(state: AppState, action: Action): AppState {
         id,
         name: action.name,
         email: action.email,
-        password: action.password,
+        password: "",
+        passwordHash: action.passwordHash,
         role: action.role,
         phone: action.phone,
         consentHipaa: true,
@@ -471,7 +482,8 @@ function reducer(state: AppState, action: Action): AppState {
             id: patientId,
             name: action.patientName.trim(),
             email,
-            password: "demo123",
+            password: "",
+            passwordHash: "",
             role: "patient",
             phone: action.patientPhone,
             consentHipaa: true,
@@ -593,7 +605,8 @@ function reducer(state: AppState, action: Action): AppState {
         id: userId,
         name: action.name.trim(),
         email: action.email.trim().toLowerCase(),
-        password: action.password,
+        password: "",
+        passwordHash: action.passwordHash,
         role: "physio" as const,
         phone: action.phone,
         consentHipaa: true,
@@ -772,7 +785,7 @@ function reducer(state: AppState, action: Action): AppState {
 interface StoreValue {
   state: AppState;
   hydrated: boolean;
-  login: (email: string, password: string) => User | false;
+  login: (email: string, password: string) => Promise<User | false>;
   logout: () => void;
   register: (input: {
     name: string;
@@ -791,7 +804,7 @@ interface StoreValue {
     clinicId?: string;
     bio?: string;
     qualifications?: string;
-  }) => boolean;
+  }) => Promise<boolean>;
   updateProfile: (profile: PatientProfile) => void;
   updateDoctor: (doctor: DoctorProfile) => void;
   assignProgram: (input: {
@@ -845,7 +858,7 @@ interface StoreValue {
     specialty: string;
     phone: string;
     bio: string;
-  }) => boolean;
+  }) => Promise<boolean>;
   setConsultStatus: (id: string, status: Consult["status"]) => void;
   setBookingStatus: (id: string, status: Booking["status"]) => void;
   addReview: (review: Omit<Review, "id" | "createdAt">) => void;
@@ -858,6 +871,7 @@ interface StoreValue {
   toggleFavoriteVideo: (patientId: string, videoId: string) => void;
   audit: (actorId: string, action: string, detail: string) => void;
   deleteAccount: (userId: string) => void;
+  mergeBookings: (bookings: Booking[]) => void;
   resetDemo: () => void;
 }
 
@@ -893,7 +907,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const users = state.users.map((u) => stripUserSecrets(u));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, users }));
     } catch {
       /* quota */
     }
@@ -917,13 +932,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    const user = state.users.find((u) => u.id === state.currentUserId);
-    if (user) {
-      void syncFirebaseAuth(user.email, user.password);
-      return;
+    if (!state.currentUserId) {
+      void clearFirebaseAuth();
     }
-    void clearFirebaseAuth();
-  }, [hydrated, state.currentUserId, state.users]);
+  }, [hydrated, state.currentUserId]);
 
   useEffect(() => {
     function onStorage(event: StorageEvent) {
@@ -944,24 +956,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const login = useCallback((email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
+    const candidates = [...state.users, ...seedState.users];
     const found =
-      state.users.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
-      ) ??
-      seedState.users.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
-      );
-    if (!found) return false;
-    sessionLock.current = found.id;
-    try {
-      localStorage.setItem(SESSION_KEY, found.id);
-      setAuthCookies(found.role, found.id);
-    } catch {
-      /* ignore */
+      candidates.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? undefined;
+    const passwordOk = found
+      ? await verifyPassword(password, found.passwordHash || found.password)
+      : false;
+    if (found && passwordOk) {
+      await syncFirebaseAuth(found.email, password, { createIfMissing: true });
+      sessionLock.current = found.id;
+      try {
+        localStorage.setItem(SESSION_KEY, found.id);
+        setAuthCookies(found.role, found.id);
+      } catch {
+        /* ignore */
+      }
+      dispatch({ type: "login", userId: found.id });
+      if (found.password && !isPasswordHashed(found.password) && !found.passwordHash) {
+        dispatch({ type: "setPasswordHash", userId: found.id, passwordHash: await hashPassword(password) });
+      }
+      return found;
     }
-    dispatch({ type: "login", email, password });
-    return found;
+    const remote = await syncFirebaseAuth(email, password, { createIfMissing: false });
+    if (remote && found) {
+      sessionLock.current = found.id;
+      try {
+        localStorage.setItem(SESSION_KEY, found.id);
+        setAuthCookies(found.role, found.id);
+      } catch {
+        /* ignore */
+      }
+      dispatch({ type: "login", userId: found.id });
+      dispatch({ type: "setPasswordHash", userId: found.id, passwordHash: await hashPassword(password) });
+      return found;
+    }
+    return false;
   }, [state.users]);
 
   const logout = useCallback(() => {
@@ -976,11 +1006,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void clearFirebaseAuth();
     dispatch({ type: "logout" });
   }, []);
-  const register = useCallback((input: Parameters<StoreValue["register"]>[0]) => {
+  const register = useCallback(async (input: Parameters<StoreValue["register"]>[0]) => {
     if (state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
       return false;
     }
-    dispatch({ type: "register", ...input });
+    const passwordHash = await hashPassword(input.password);
+    await syncFirebaseAuth(input.email, input.password, { createIfMissing: true });
+    dispatch({ type: "register", ...input, password: "", passwordHash });
     sessionLock.current = "pending";
     return true;
   }, [state.users]);
@@ -1035,15 +1067,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const bookingId = input.bookingId ?? `book-${Math.random().toString(36).slice(2, 9)}`;
       const consultId = input.consultId ?? `call-${Math.random().toString(36).slice(2, 9)}`;
       dispatch({ type: "createBooking", ...input, bookingId, consultId });
+      const booking = {
+        id: bookingId,
+        consultId,
+        patientId: input.createdById,
+        physioId: input.physioId,
+        createdById: input.createdById,
+        patientName: input.patientName,
+        patientEmail: input.patientEmail.trim().toLowerCase(),
+        patientPhone: input.patientPhone,
+        scheduledAt: input.scheduledAt,
+        durationMin: input.durationMin,
+        reason: input.reason,
+        notes: input.notes,
+        status: "upcoming" as const,
+        createdAt: new Date().toISOString(),
+        paymentId: input.paymentId,
+        razorpayOrderId: input.razorpayOrderId,
+        paymentStatus: input.paymentStatus ?? "success",
+        amount: input.amount,
+        currency: input.currency,
+        paymentMethod: input.paymentMethod,
+        paidAt: input.paidAt,
+        consultationFee: input.consultationFee,
+        platformFee: input.platformFee,
+        mode: input.mode,
+        finalPrice: input.finalPrice,
+        clinicAddress: input.clinicAddress,
+        meetingLink: input.meetingLink,
+      };
+      void persistPaidBooking(booking, {
+        patientEmail: input.patientEmail,
+        doctorEmail: doctor.email,
+      });
+      if (input.razorpayOrderId && input.paymentId) {
+        void persistPaymentRecord({
+          orderId: input.razorpayOrderId,
+          paymentId: input.paymentId,
+          paymentStatus: "success",
+          amount: input.amount ?? 0,
+          currency: input.currency ?? "INR",
+          patientId: input.createdById,
+          doctorId: input.physioId,
+          patientEmail: input.patientEmail,
+          bookingId,
+        });
+      }
       return bookingId;
     },
     [state.users],
   );
-  const addDoctor = useCallback((input: Parameters<StoreValue["addDoctor"]>[0]) => {
+  const addDoctor = useCallback(async (input: Parameters<StoreValue["addDoctor"]>[0]) => {
     if (state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
       return false;
     }
-    dispatch({ type: "addDoctor", ...input });
+    const passwordHash = await hashPassword(input.password);
+    dispatch({ type: "addDoctor", ...input, password: "", passwordHash });
     return true;
   }, [state.users]);
   const setConsultStatus = useCallback(
@@ -1054,6 +1133,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (id: string, status: Booking["status"]) => dispatch({ type: "setBookingStatus", id, status }),
     [],
   );
+  const mergeBookings = useCallback((bookings: Booking[]) => dispatch({ type: "mergeBookings", bookings }), []);
   const addReview = useCallback(
     (review: Omit<Review, "id" | "createdAt">) => dispatch({ type: "addReview", review }),
     [],
@@ -1130,6 +1210,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleFavoriteVideo,
       audit,
       deleteAccount,
+      mergeBookings,
       resetDemo,
     }),
     [
@@ -1146,6 +1227,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logPain,
       logout,
       markNotificationsRead,
+      mergeBookings,
       register,
       resetDemo,
       scheduleConsult,
