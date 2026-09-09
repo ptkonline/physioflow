@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       ok: true,
       sent: 0,
       stub: false,
-      hint: "Add FIREBASE_SERVICE_ACCOUNT_JSON (and usually RESEND_API_KEY) so this hourly cron can load bookings and send email/FCM. Client ReminderWatcher still covers in-browser sessions.",
+      hint: "Add FIREBASE_SERVICE_ACCOUNT_JSON (and usually RESEND_API_KEY) so this daily cron can load bookings and send email/FCM. Client ReminderWatcher still covers in-browser sessions.",
     });
   }
 
