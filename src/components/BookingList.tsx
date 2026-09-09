@@ -1,10 +1,11 @@
 "use client";
 
 import { RatingAndReview } from "@/components/reviews/RatingAndReview";
+import { SlotCalendar } from "@/components/SlotCalendar";
 import { formatSlot } from "@/lib/availability";
-import { formatInr } from "@/lib/pricing";
 import { useCurrentUser, useStore } from "@/lib/store";
 import Link from "next/link";
+import { useState } from "react";
 
 export function BookingList({
   physioId,
@@ -14,7 +15,12 @@ export function BookingList({
   patientId?: string;
 }) {
   const { user } = useCurrentUser();
-  const { state, setBookingStatus } = useStore();
+  const { state, setBookingStatus, rescheduleBooking } = useStore();
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
+  const [nextSlot, setNextSlot] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
   const rows = (state.bookings ?? [])
     .filter((b) => (physioId ? b.physioId === physioId : true))
     .filter((b) => (patientId ? b.patientId === patientId : true))
@@ -27,6 +33,21 @@ export function BookingList({
   const isDoctor = user?.role === "physio";
   const chatBase = isDoctor ? "/doctor/chat" : "/patient/chat";
   const rxBase = isDoctor ? "/doctor/prescriptions" : "/patient/prescriptions";
+  const active = rows.find((b) => b.id === rescheduleId);
+
+  async function confirmReschedule() {
+    if (!rescheduleId || !nextSlot) return;
+    setBusy(true);
+    setError("");
+    const ok = await rescheduleBooking(rescheduleId, nextSlot);
+    setBusy(false);
+    if (!ok) {
+      setError("Slot no longer available. Pick another time.");
+      return;
+    }
+    setRescheduleId(null);
+    setNextSlot("");
+  }
 
   return (
     <ul className="space-y-3">
@@ -65,13 +86,26 @@ export function BookingList({
                   Open chat
                 </Link>
                 {b.mode !== "offline" && (
-                <Link href={b.meetingLink || `/consult/${b.consultId}`} className="btn btn-ghost">
-                  Open visit
-                </Link>
+                  <Link href={b.meetingLink || `/consult/${b.consultId}`} className="btn btn-ghost">
+                    Open visit
+                  </Link>
                 )}
                 <Link href={`${rxBase}?booking=${b.id}`} className="btn btn-ghost">
                   Prescriptions
                 </Link>
+                {b.status === "upcoming" && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setRescheduleId(b.id);
+                      setNextSlot("");
+                      setError("");
+                    }}
+                  >
+                    Reschedule
+                  </button>
+                )}
               </div>
             </div>
             {isDoctor && b.status === "upcoming" && (
@@ -90,6 +124,42 @@ export function BookingList({
           </li>
         );
       })}
+
+      {active && (
+        <li className="card space-y-4 p-5 ring-2 ring-teal">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">Reschedule appointment</h3>
+              <p className="text-muted">
+                Current: {formatSlot(active.scheduledAt)}. Pick a new open slot — the booking id stays the same.
+              </p>
+            </div>
+            <button type="button" className="btn btn-ghost" onClick={() => setRescheduleId(null)}>
+              Close
+            </button>
+          </div>
+          <SlotCalendar
+            physioId={active.physioId}
+            state={{
+              ...state,
+              bookings: (state.bookings ?? []).map((b) =>
+                b.id === active.id ? { ...b, status: "cancelled" } : b,
+              ),
+            }}
+            value={nextSlot}
+            onChange={setNextSlot}
+          />
+          {error && <p className="text-rose">{error}</p>}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!nextSlot || busy}
+            onClick={() => void confirmReschedule()}
+          >
+            {busy ? "Saving…" : "Confirm new time"}
+          </button>
+        </li>
+      )}
     </ul>
   );
 }

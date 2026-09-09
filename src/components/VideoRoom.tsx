@@ -259,6 +259,22 @@ export function VideoRoom({
     setCamOff(next);
   }
 
+  async function switchToAudioOnly() {
+    if (audioOnly) return;
+    setAudioOnly(true);
+    audioOnlyRef.current = true;
+    setCamOff(true);
+    streamRef.current?.getVideoTracks().forEach((t) => {
+      t.enabled = false;
+      t.stop();
+      streamRef.current?.removeTrack(t);
+      pcRef.current?.getSenders().forEach((sender) => {
+        if (sender.track?.kind === "video") void sender.replaceTrack(null);
+      });
+    });
+    setStatus("Switched to audio-only");
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-muted">{status}</p>
@@ -324,6 +340,11 @@ export function VideoRoom({
               {camOff || audioOnly ? <VideoOff size={18} /> : <Video size={18} />}{" "}
               {audioOnly ? "Voice call" : camOff ? "Camera on" : "Camera off"}
             </button>
+            {!audioOnly && (
+              <button type="button" className="btn btn-ghost" onClick={() => void switchToAudioOnly()}>
+                <Phone size={18} /> Switch to audio-only
+              </button>
+            )}
             <button type="button" className="btn bg-rose text-white" onClick={() => void leave()}>
               <PhoneOff size={18} /> End visit
             </button>

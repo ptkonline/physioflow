@@ -1,5 +1,11 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { isFirebaseConfigured } from "./firebase-config";
 
@@ -17,6 +23,7 @@ function config() {
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 let storage: FirebaseStorage | undefined;
+let persistenceWarned = false;
 
 export function getFirebase() {
   if (!isFirebaseConfigured()) {
@@ -24,7 +31,18 @@ export function getFirebase() {
   }
   if (!app) {
     app = getApps()[0] ?? initializeApp(config());
-    db = getFirestore(app);
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      });
+    } catch (err) {
+      // Already initialized (HMR) or unsupported environment — fall back.
+      if (!persistenceWarned && process.env.NODE_ENV === "development") {
+        persistenceWarned = true;
+        console.debug("[firebase] persistent cache unavailable", err);
+      }
+      db = getFirestore(app);
+    }
     storage = getStorage(app);
   }
   return { app, db: db!, storage: storage! };

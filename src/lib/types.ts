@@ -76,6 +76,8 @@ export interface DoctorProfile {
 
 export type PaymentStatus = "pending" | "success" | "failed" | "refunded";
 
+export type CallStatus = "ringing" | "live" | "ended" | "missed";
+
 export interface Booking {
   id: string;
   consultId: string;
@@ -173,7 +175,7 @@ export interface AppNotification {
   userId: string;
   title: string;
   body: string;
-  type: "exercise" | "consult" | "feedback" | "system";
+  type: "exercise" | "consult" | "feedback" | "system" | "missed_call";
   read: boolean;
   createdAt: string;
   href?: string;

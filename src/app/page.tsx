@@ -30,9 +30,12 @@ export default function HomePage() {
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Logo className="text-xl" />
-        <div className="flex gap-2">
-          <Link href="/login" className="btn btn-ghost">
-            Sign in
+        <div className="flex flex-wrap gap-2">
+          <Link href="/login?role=patient" className="btn btn-ghost">
+            Patient sign in
+          </Link>
+          <Link href="/login?role=doctor" className="btn btn-ghost">
+            Doctor sign in
           </Link>
           <Link href="/register" className="btn btn-primary">
             Get started
@@ -53,8 +56,11 @@ export default function HomePage() {
               <Link href="/register" className="btn btn-primary">
                 Create a free account
               </Link>
-              <Link href="/login" className="btn btn-ghost">
-                Try the demo
+              <Link href="/login?role=patient" className="btn btn-ghost">
+                Patient demo
+              </Link>
+              <Link href="/login?role=doctor" className="btn btn-ghost">
+                Doctor demo
               </Link>
             </div>
           </div>

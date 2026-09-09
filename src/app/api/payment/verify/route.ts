@@ -1,4 +1,4 @@
-import { notifyDoctorOfPayment } from "@/lib/server/payment-notify";
+import { notifyDoctorOfPayment, notifyPatientOfPayment } from "@/lib/server/payment-notify";
 import { getPaymentOrder, markOrderPaid } from "@/lib/server/payment-orders";
 import { isRazorpayConfigured, verifyCheckoutSignature } from "@/lib/server/razorpay";
 import { NextRequest } from "next/server";
@@ -50,13 +50,24 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Could not record payment." }, { status: 500 });
   }
 
+  const paymentRef = paid.paymentId ?? paymentId;
   await notifyDoctorOfPayment({
     doctorEmail: paid.draft.doctorEmail,
     doctorName: paid.draft.doctorName,
     patientName: paid.draft.patientName,
     scheduledAt: paid.draft.scheduledAt,
     amount: paid.quote.amount,
-    paymentId: paid.paymentId ?? paymentId,
+    paymentId: paymentRef,
+    doctorId: paid.draft.doctorId,
+  });
+  await notifyPatientOfPayment({
+    patientEmail: paid.draft.patientEmail,
+    patientName: paid.draft.patientName,
+    doctorName: paid.draft.doctorName,
+    scheduledAt: paid.draft.scheduledAt,
+    bookingId: paid.orderId,
+    paymentId: paymentRef,
+    patientId: paid.draft.patientId,
   });
 
   return Response.json({ ok: true, idempotent: false, order: paid });

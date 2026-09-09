@@ -1,4 +1,21 @@
 import { quoteFees, type AppointmentDraft } from "@/lib/pricing";
+import { sendPlainEmail } from "@/lib/server/mail";
+import { getAdminDb } from "@/lib/server/firebase-admin";
+
+async function sendFcmToUser(userId: string, title: string, body: string) {
+  if (!userId) return;
+  const db = await getAdminDb();
+  if (!db) return;
+  try {
+    const snap = await db.collection("users").doc(userId).get();
+    const token = String(snap.data()?.fcmToken ?? "").trim();
+    if (!token) return;
+    const admin = await import("firebase-admin");
+    await admin.messaging().send({ token, notification: { title, body } });
+  } catch (err) {
+    console.warn("[payment-notify/fcm]", err instanceof Error ? err.message : err);
+  }
+}
 
 export async function notifyDoctorOfPayment(input: {
   doctorEmail: string;
@@ -7,9 +24,8 @@ export async function notifyDoctorOfPayment(input: {
   scheduledAt: string;
   amount: number;
   paymentId: string;
+  doctorId?: string;
 }) {
-  const resendKey = process.env.RESEND_API_KEY;
-  const from = process.env.NOTIFY_FROM_EMAIL || "PhysioFlow <noreply@resend.dev>";
   const when = new Date(input.scheduledAt).toLocaleString("en-IN");
   const text = [
     `A patient paid and confirmed a visit with ${input.doctorName}.`,
@@ -20,25 +36,61 @@ export async function notifyDoctorOfPayment(input: {
     `Payment ID: ${input.paymentId}`,
   ].join("\n");
 
-  if (!resendKey || !input.doctorEmail) {
-    console.info("[payment-notify]", text);
+  if (!input.doctorEmail) {
+    console.info("[payment-notify/doctor]", text);
     return { sent: false };
   }
-
-  await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [input.doctorEmail],
-      subject: `Paid booking: ${input.patientName}`,
-      text,
-    }),
+  const email = await sendPlainEmail({
+    to: input.doctorEmail,
+    subject: `Paid booking: ${input.patientName}`,
+    text,
   });
-  return { sent: true };
+  if (input.doctorId) {
+    await sendFcmToUser(
+      input.doctorId,
+      "New paid booking",
+      `${input.patientName} · ${when}`,
+    );
+  }
+  return email;
+}
+
+export async function notifyPatientOfPayment(input: {
+  patientEmail: string;
+  patientName: string;
+  doctorName: string;
+  scheduledAt: string;
+  bookingId: string;
+  paymentId: string;
+  patientId?: string;
+}) {
+  const when = new Date(input.scheduledAt).toLocaleString("en-IN");
+  const text = [
+    `Appointment confirmed with Dr. ${input.doctorName} at ${when}.`,
+    `Booking ID: ${input.bookingId}`,
+    `Payment ID: ${input.paymentId}`,
+    "",
+    `Hi ${input.patientName || "there"},`,
+    "Your payment was received. See you at the visit.",
+  ].join("\n");
+
+  if (!input.patientEmail) {
+    console.info("[payment-notify/patient]", text);
+    return { sent: false };
+  }
+  const email = await sendPlainEmail({
+    to: input.patientEmail,
+    subject: `Appointment confirmed with Dr. ${input.doctorName}`,
+    text,
+  });
+  if (input.patientId) {
+    await sendFcmToUser(
+      input.patientId,
+      "Appointment confirmed",
+      `Dr. ${input.doctorName} at ${when}. Booking ID: ${input.bookingId}`,
+    );
+  }
+  return email;
 }
 
 export function serverQuote(doctorId: string, profileFee?: number) {

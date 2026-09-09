@@ -67,7 +67,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/patient/dashboard", request.url));
   }
 
-  if (role === "doctor" && isPatientPath(pathname)) {
+  // Cookie value is portal role "doctor" (see portalRole); accept legacy "physio" too.
+  if ((role === "doctor" || role === "physio") && isPatientPath(pathname)) {
     return NextResponse.redirect(new URL("/doctor/dashboard", request.url));
   }
 

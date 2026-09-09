@@ -21,7 +21,10 @@ export function AuthGate({
   useEffect(() => {
     if (!hydrated) return;
     if (!user) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      const roleHint = role === "physio" ? "doctor" : role === "patient" ? "patient" : "";
+      const next = encodeURIComponent(pathname);
+      const qs = roleHint ? `next=${next}&role=${roleHint}` : `next=${next}`;
+      router.replace(`/login?${qs}`);
       return;
     }
     if (role && user.role !== role) {

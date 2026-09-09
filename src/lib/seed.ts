@@ -1,5 +1,9 @@
 import type { LibraryVideo } from "./care-types";
+import { hashPasswordSync } from "./password";
 import type { AppState, Exercise } from "./types";
+
+/** Shared demo credential hash — plaintext never stored in seed data. */
+const DEMO_PASSWORD_HASH = hashPasswordSync("demo123");
 
 export const CONDITIONS = [
   { id: "knee", label: "Knee injury" },
@@ -229,7 +233,8 @@ export const seedState: AppState = {
       id: "physio-james",
       name: "Dr. James Okonkwo",
       email: "james@demo.physio",
-      password: "demo123",
+      password: "",
+      passwordHash: DEMO_PASSWORD_HASH,
       role: "physio",
       phone: "020 7946 0011",
       profileImageUrl: "https://images.pexels.com/photos/5215024/pexels-photo-5215024.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -241,7 +246,8 @@ export const seedState: AppState = {
       id: "physio-aisha",
       name: "Dr. Aisha Rahman",
       email: "aisha@demo.physio",
-      password: "demo123",
+      password: "",
+      passwordHash: DEMO_PASSWORD_HASH,
       role: "physio",
       phone: "020 7946 0012",
       profileImageUrl: "https://images.pexels.com/photos/5407206/pexels-photo-5407206.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -253,7 +259,8 @@ export const seedState: AppState = {
       id: "patient-maya",
       name: "Maya Chen",
       email: "maya@demo.physio",
-      password: "demo123",
+      password: "",
+      passwordHash: DEMO_PASSWORD_HASH,
       role: "patient",
       consentHipaa: true,
       consentGdpr: true,
@@ -263,7 +270,8 @@ export const seedState: AppState = {
       id: "patient-robert",
       name: "Robert Hale",
       email: "robert@demo.physio",
-      password: "demo123",
+      password: "",
+      passwordHash: DEMO_PASSWORD_HASH,
       role: "patient",
       consentHipaa: true,
       consentGdpr: true,

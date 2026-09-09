@@ -31,7 +31,7 @@ import type {
 import { DEFAULT_HOURS } from "./types";
 import type { DailyLog, Prescription, Review } from "./care-types";
 import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
-import { hashPassword, isPasswordHashed, stripUserSecrets, verifyPassword } from "./password";
+import { comparePassword, hashPassword, hasLocalCredential, isPasswordHashed, needsBcryptUpgrade, stripUserSecrets } from "./password";
 import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
 import { revokeAdminSession } from "./admin-actions";
 import { clearAuthCookies, setAuthCookies } from "./auth-session";
@@ -39,6 +39,19 @@ import { clearAuthCookies, setAuthCookies } from "./auth-session";
 const STORAGE_KEY = "physioflow.v4";
 const LEGACY_KEY = "physioflow.v3";
 const SESSION_KEY = "physioflow.session";
+
+function withSeedCredentials(user: User): User {
+  if (hasLocalCredential(user)) return user;
+  const seed = seedState.users.find(
+    (s) => s.id === user.id || s.email.toLowerCase() === user.email.toLowerCase(),
+  );
+  if (!seed || !hasLocalCredential(seed)) return user;
+  return {
+    ...user,
+    password: seed.password,
+    passwordHash: seed.passwordHash,
+  };
+}
 
 function readVaultSync(): AppState | null {
   try {
@@ -137,6 +150,7 @@ type Action =
     }
   | { type: "setConsultStatus"; id: string; status: Consult["status"] }
   | { type: "setBookingStatus"; id: string; status: Booking["status"] }
+  | { type: "rescheduleBooking"; id: string; scheduledAt: string }
   | { type: "addReview"; review: Omit<Review, "id" | "createdAt"> }
   | { type: "addPrescription"; prescription: Omit<Prescription, "id" | "createdAt"> }
   | { type: "upsertDailyLog"; log: Omit<DailyLog, "id" | "createdAt"> }
@@ -173,7 +187,7 @@ function normalizeState(incoming: AppState): AppState {
   const users: User[] = [...(incoming.users ?? [])].map((u) => {
     const doctor = doctors.find((d) => d.userId === u.id);
     return {
-      ...u,
+      ...withSeedCredentials(u),
       profileImageUrl: u.profileImageUrl || doctor?.photoUrl,
     };
   });
@@ -666,6 +680,50 @@ function reducer(state: AppState, action: Action): AppState {
             : c;
         }),
       };
+    case "rescheduleBooking": {
+      const booking = (state.bookings ?? []).find((b) => b.id === action.id);
+      if (!booking || booking.status !== "upcoming") return state;
+      const clash = (state.bookings ?? []).some(
+        (b) =>
+          b.id !== action.id &&
+          b.physioId === booking.physioId &&
+          b.status === "upcoming" &&
+          new Date(b.scheduledAt).setSeconds(0, 0) === new Date(action.scheduledAt).setSeconds(0, 0),
+      );
+      if (clash) return state;
+      return {
+        ...state,
+        bookings: (state.bookings ?? []).map((b) =>
+          b.id === action.id ? { ...b, scheduledAt: action.scheduledAt } : b,
+        ),
+        consults: state.consults.map((c) =>
+          c.id === booking.consultId ? { ...c, scheduledAt: action.scheduledAt } : c,
+        ),
+        notifications: [
+          ...state.notifications,
+          {
+            id: uid("n"),
+            userId: booking.patientId,
+            title: "Appointment rescheduled",
+            body: `New time: ${new Date(action.scheduledAt).toLocaleString()}`,
+            type: "consult" as const,
+            read: false,
+            createdAt: new Date().toISOString(),
+            href: "/patient/appointments",
+          },
+          {
+            id: uid("n"),
+            userId: booking.physioId,
+            title: "Appointment rescheduled",
+            body: `${booking.patientName} moved to ${new Date(action.scheduledAt).toLocaleString()}`,
+            type: "consult" as const,
+            read: false,
+            createdAt: new Date().toISOString(),
+            href: "/doctor/appointments",
+          },
+        ],
+      };
+    }
     case "addReview": {
       if (state.reviews.some((r) => r.appointmentId === action.review.appointmentId)) return state;
       return {
@@ -861,6 +919,7 @@ interface StoreValue {
   }) => Promise<boolean>;
   setConsultStatus: (id: string, status: Consult["status"]) => void;
   setBookingStatus: (id: string, status: Booking["status"]) => void;
+  rescheduleBooking: (id: string, scheduledAt: string) => Promise<boolean>;
   addReview: (review: Omit<Review, "id" | "createdAt">) => void;
   addPrescription: (prescription: Omit<Prescription, "id" | "createdAt">) => void;
   upsertDailyLog: (log: Omit<DailyLog, "id" | "createdAt">) => void;
@@ -880,6 +939,7 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, seedState);
   const [hydrated, setHydrated] = useState(false);
+  const [secretsReady, setSecretsReady] = useState(false);
   const sessionLock = useRef<string | null>(null);
 
   useLayoutEffect(() => {
@@ -906,13 +966,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
+    let cancelled = false;
+    void (async () => {
+      const updates: { userId: string; passwordHash: string }[] = [];
+      for (const user of state.users) {
+        if (user.password && isPasswordHashed(user.password) && !isPasswordHashed(user.passwordHash)) {
+          updates.push({ userId: user.id, passwordHash: user.password });
+        } else if (user.password && !isPasswordHashed(user.password) && !isPasswordHashed(user.passwordHash)) {
+          updates.push({ userId: user.id, passwordHash: await hashPassword(user.password) });
+        }
+      }
+      if (cancelled) return;
+      for (const update of updates) {
+        dispatch({ type: "setPasswordHash", userId: update.userId, passwordHash: update.passwordHash });
+      }
+      setSecretsReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, state.users]);
+
+  useEffect(() => {
+    if (!hydrated || !secretsReady) return;
+    const hasPlaintext = state.users.some(
+      (u) => Boolean(u.password) && !isPasswordHashed(u.password) && !isPasswordHashed(u.passwordHash),
+    );
+    if (hasPlaintext) return;
     try {
       const users = state.users.map((u) => stripUserSecrets(u));
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, users }));
     } catch {
       /* quota */
     }
-  }, [hydrated, state]);
+  }, [hydrated, secretsReady, state]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -957,13 +1044,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
     const candidates = [...state.users, ...seedState.users];
-    const found =
-      candidates.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? undefined;
+    const matches = candidates.filter((u) => u.email.toLowerCase() === normalizedEmail);
+    // Prefer a match that still has a usable credential (passwordHash or plain password).
+    // Persisted vaults used to strip plaintext before hashing, which left demo users
+    // unable to sign in even though seed credentials were still available.
+    const found = matches.find((u) => hasLocalCredential(u)) ?? matches[0] ?? undefined;
+
     const passwordOk = found
-      ? await verifyPassword(password, found.passwordHash || found.password)
+      ? await comparePassword(password, found.passwordHash || found.password)
       : false;
     if (found && passwordOk) {
+      // Plaintext only in-memory for Firebase Auth — never persisted.
       await syncFirebaseAuth(found.email, password, { createIfMissing: true });
       sessionLock.current = found.id;
       try {
@@ -973,7 +1066,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         /* ignore */
       }
       dispatch({ type: "login", userId: found.id });
-      if (found.password && !isPasswordHashed(found.password) && !found.passwordHash) {
+      // Migrate plaintext / legacy PBKDF2 (or hash parked in `password`) → bcrypt passwordHash.
+      if (needsBcryptUpgrade(found)) {
         dispatch({ type: "setPasswordHash", userId: found.id, passwordHash: await hashPassword(password) });
       }
       return found;
@@ -1064,6 +1158,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         (u) => u.email.toLowerCase() === input.patientEmail.trim().toLowerCase() && u.role !== "patient",
       );
       if (!doctor || clash) return false;
+      const slotTaken = (state.bookings ?? []).some(
+        (b) =>
+          b.physioId === input.physioId &&
+          b.status === "upcoming" &&
+          new Date(b.scheduledAt).setSeconds(0, 0) === new Date(input.scheduledAt).setSeconds(0, 0),
+      );
+      if (slotTaken) return false;
       const bookingId = input.bookingId ?? `book-${Math.random().toString(36).slice(2, 9)}`;
       const consultId = input.consultId ?? `call-${Math.random().toString(36).slice(2, 9)}`;
       dispatch({ type: "createBooking", ...input, bookingId, consultId });
@@ -1100,6 +1201,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         patientEmail: input.patientEmail,
         doctorEmail: doctor.email,
       });
+      void fetch("/api/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId,
+          consultId,
+          physioId: input.physioId,
+          patientId: input.createdById,
+          patientName: input.patientName,
+          patientEmail: input.patientEmail,
+          patientPhone: input.patientPhone,
+          doctorEmail: doctor.email,
+          scheduledAt: input.scheduledAt,
+          durationMin: input.durationMin,
+          reason: input.reason,
+          notes: input.notes,
+          mode: input.mode,
+          paymentId: input.paymentId,
+          razorpayOrderId: input.razorpayOrderId,
+          paymentStatus: input.paymentStatus ?? "success",
+          amount: input.amount,
+          currency: input.currency,
+        }),
+      }).catch(() => undefined);
       if (input.razorpayOrderId && input.paymentId) {
         void persistPaymentRecord({
           orderId: input.razorpayOrderId,
@@ -1115,7 +1240,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       return bookingId;
     },
-    [state.users],
+    [state.bookings, state.users],
   );
   const addDoctor = useCallback(async (input: Parameters<StoreValue["addDoctor"]>[0]) => {
     if (state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
@@ -1132,6 +1257,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setBookingStatus = useCallback(
     (id: string, status: Booking["status"]) => dispatch({ type: "setBookingStatus", id, status }),
     [],
+  );
+  const rescheduleBooking = useCallback(
+    async (id: string, scheduledAt: string) => {
+      const booking = state.bookings.find((b) => b.id === id);
+      if (!booking || booking.status !== "upcoming") return false;
+      const clash = state.bookings.some(
+        (b) =>
+          b.id !== id &&
+          b.physioId === booking.physioId &&
+          b.status === "upcoming" &&
+          new Date(b.scheduledAt).setSeconds(0, 0) === new Date(scheduledAt).setSeconds(0, 0),
+      );
+      if (clash) return false;
+      try {
+        const res = await fetch("/api/book", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingId: id,
+            physioId: booking.physioId,
+            scheduledAt,
+            previousScheduledAt: booking.scheduledAt,
+          }),
+        });
+        if (res.status === 409) return false;
+      } catch {
+        /* local-only fallback */
+      }
+      dispatch({ type: "rescheduleBooking", id, scheduledAt });
+      const doctor = state.users.find((u) => u.id === booking.physioId);
+      void persistPaidBooking(
+        { ...booking, scheduledAt },
+        { patientEmail: booking.patientEmail, doctorEmail: doctor?.email },
+      );
+      return true;
+    },
+    [state.bookings, state.users],
   );
   const mergeBookings = useCallback((bookings: Booking[]) => dispatch({ type: "mergeBookings", bookings }), []);
   const addReview = useCallback(
@@ -1200,6 +1362,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addDoctor,
       setConsultStatus,
       setBookingStatus,
+      rescheduleBooking,
       addReview,
       addPrescription,
       upsertDailyLog,
@@ -1233,6 +1396,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       scheduleConsult,
       setBookingStatus,
       setConsultStatus,
+      rescheduleBooking,
       addReview,
       addPrescription,
       upsertDailyLog,

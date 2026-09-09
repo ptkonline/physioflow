@@ -52,7 +52,7 @@ export function VideoCall({ consultId }: { consultId: string }) {
             userId: otherId,
             title: "Missed call",
             body: `${user.name} tried to reach you for ${consult.topic}.`,
-            type: "consult",
+            type: "missed_call",
             href: `/consult/${consult.id}`,
           });
         }}

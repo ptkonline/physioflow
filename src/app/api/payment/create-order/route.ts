@@ -1,6 +1,8 @@
 import { parseDraft } from "@/lib/server/payment-notify";
 import { persistPaymentToken, savePaymentOrder } from "@/lib/server/payment-orders";
 import { createRazorpayOrder, isRazorpayConfigured, razorpayKeyId } from "@/lib/server/razorpay";
+import { canSignServerPayload } from "@/lib/server/signed-json";
+import { getAdminDb } from "@/lib/server/firebase-admin";
 import { quoteFees } from "@/lib/pricing";
 import { NextRequest } from "next/server";
 
@@ -22,6 +24,7 @@ export async function POST(request: NextRequest) {
     offlineFee: draft.offlineFee,
   });
   const receipt = `pf_${Date.now().toString(36)}`.slice(0, 40);
+  const durable = canSignServerPayload() || Boolean(await getAdminDb());
 
   if (!isRazorpayConfigured()) {
     const orderId = `demo_order_${receipt}`;
@@ -39,6 +42,10 @@ export async function POST(request: NextRequest) {
       keyId: "",
       quote,
       persistenceToken: await persistPaymentToken(record),
+      durable,
+      hint: durable
+        ? undefined
+        : "Set PAYMENT_SIGNING_SECRET (or ADMIN_SESSION_SECRET) and/or FIREBASE_SERVICE_ACCOUNT_JSON so orders survive restarts.",
     });
   }
 
@@ -67,6 +74,10 @@ export async function POST(request: NextRequest) {
       keyId: razorpayKeyId(),
       quote,
       persistenceToken: await persistPaymentToken(record),
+      durable,
+      hint: durable
+        ? undefined
+        : "Set PAYMENT_SIGNING_SECRET (or ADMIN_SESSION_SECRET) and/or FIREBASE_SERVICE_ACCOUNT_JSON so orders survive restarts.",
     });
   } catch (err) {
     return Response.json(

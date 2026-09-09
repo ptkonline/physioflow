@@ -54,7 +54,9 @@ export default function PatientDashboardPage() {
         <article className="card p-5">
           <p className="text-sm text-muted">Unread reminders</p>
           <p className="mt-1 text-3xl font-semibold">{unread}</p>
-          <Link href="/patient/notifications">Open inbox</Link>
+          <Link href="/patient/notifications" className="btn btn-ghost mt-2 inline-flex">
+            Open inbox
+          </Link>
         </article>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">

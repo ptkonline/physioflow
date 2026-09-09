@@ -3,7 +3,6 @@
 import { Logo } from "@/components/Logo";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { issueAdminSession } from "@/lib/admin-actions";
-import { homePath } from "@/lib/paths";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { User } from "@/lib/types";
 import { useTranslations } from "next-intl";
@@ -22,27 +21,43 @@ function LoginForm() {
   const [password, setPassword] = useState("demo123");
   const [error, setError] = useState("");
 
+  const roleHint = params.get("role");
+
+  useEffect(() => {
+    if (roleHint === "doctor" || roleHint === "physio") {
+      setEmail("james@demo.physio");
+    } else if (roleHint === "patient") {
+      setEmail("maya@demo.physio");
+    }
+  }, [roleHint]);
+
   useEffect(() => {
     if (!hydrated || !user) return;
     let cancelled = false;
     void (async () => {
       const claimed = await issueAdminSession({ email: user.email, userId: user.id });
       if (cancelled) return;
+      // Role home by default. Only honor /admin when next asks for it and session is admin.
+      // Do not force admin users (e.g. james@demo.physio) away from the doctor portal.
       const next = params.get("next");
       if (next?.startsWith("/admin")) {
         router.replace(claimed.admin ? next : "/unauthorized");
         return;
       }
-      const dest = next && !next.startsWith("/staff") ? next : homePath(user.role);
-      if (user.role === "physio" && dest.startsWith("/patient")) {
-        router.replace("/doctor/dashboard");
-        return;
+      const role = user.role;
+      // Honor next only when it matches the signed-in role's portal.
+      if (next && !next.startsWith("/staff")) {
+        if (role === "physio" && (next.startsWith("/doctor") || next.startsWith("/physio"))) {
+          router.replace(next);
+          return;
+        }
+        if (role === "patient" && next.startsWith("/patient")) {
+          router.replace(next);
+          return;
+        }
       }
-      if (user.role === "patient" && (dest.startsWith("/physio") || dest.startsWith("/doctor"))) {
-        router.replace("/patient/dashboard");
-        return;
-      }
-      router.replace(dest || homePath(user.role));
+      if (role === "physio") router.replace("/doctor/dashboard");
+      else router.replace("/patient/dashboard");
     })();
     return () => {
       cancelled = true;

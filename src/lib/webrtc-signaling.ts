@@ -12,6 +12,8 @@ import { getFirebase } from "./firebase";
 
 export type SignalKind = "offer" | "answer" | "ice" | "hangup" | "missed";
 
+export type CallStatus = "ringing" | "live" | "ended" | "missed";
+
 export type CallSignal =
   | {
       id: string;
@@ -50,12 +52,34 @@ export function rtcConfig(): RTCConfiguration {
   const user = process.env.NEXT_PUBLIC_TURN_USERNAME?.trim();
   const cred = process.env.NEXT_PUBLIC_TURN_CREDENTIAL?.trim();
   const iceServers = [...ICE_SERVERS];
-  if (turn) iceServers.push({ urls: turn, username: user, credential: cred });
+  if (turn) {
+    iceServers.push({ urls: turn, username: user, credential: cred });
+  } else if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    console.warn("[webrtc] NEXT_PUBLIC_TURN_URL not set — STUN-only; many NATs will fail.");
+  }
   return { iceServers, iceCandidatePoolSize: 8 };
 }
 
 function channel(roomId: string) {
   return typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(`pf-call-${roomId}`);
+}
+
+function lsKey(roomId: string) {
+  return `physioflow.call.signals.${roomId}`;
+}
+
+function publishLocalSignal(roomId: string, body: CallSignal) {
+  channel(roomId)?.postMessage(body);
+  if (typeof localStorage === "undefined") return;
+  try {
+    const raw = localStorage.getItem(lsKey(roomId));
+    const list = raw ? (JSON.parse(raw) as CallSignal[]) : [];
+    list.push(body);
+    // Keep a short ring buffer so tabs can catch up.
+    localStorage.setItem(lsKey(roomId), JSON.stringify(list.slice(-40)));
+  } catch {
+    /* quota / private mode */
+  }
 }
 
 export async function ensureCallRoom(meta: CallRoomMeta) {
@@ -69,10 +93,37 @@ export async function ensureCallRoom(meta: CallRoomMeta) {
       doctorId: meta.doctorId,
       patientEmail: meta.patientEmail.trim().toLowerCase(),
       doctorEmail: meta.doctorEmail.trim().toLowerCase(),
+      status: "ringing" satisfies CallStatus,
       updatedAt: serverTimestamp(),
     },
     { merge: true },
   );
+}
+
+export async function markCallStatus(
+  roomId: string,
+  status: CallStatus,
+  from: string,
+  extras?: { appointmentId?: string },
+) {
+  const meta = {
+    status,
+    updatedBy: from,
+    updatedAt: new Date().toISOString(),
+    ...(status === "missed" ? { missedAt: new Date().toISOString(), missedBy: from } : {}),
+    ...extras,
+  };
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(`physioflow.call.meta.${roomId}`, JSON.stringify(meta));
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!isFirebaseConfigured()) return;
+  const { db } = getFirebase();
+  await setDoc(doc(db, "calls", roomId), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(doc(db, "calls", roomId, "metadata", "current"), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 export async function sendCallSignal(
@@ -105,7 +156,14 @@ export async function sendCallSignal(
       : kind === "hangup" || kind === "missed"
         ? { id: crypto.randomUUID(), kind, from, payload: {} }
         : { id: crypto.randomUUID(), kind, from, payload: (payload as RTCSessionDescriptionInit) ?? { type: "offer" } };
-  channel(roomId)?.postMessage(body);
+  publishLocalSignal(roomId, body);
+  if (kind === "missed") {
+    await markCallStatus(roomId, "missed", from);
+  } else if (kind === "hangup") {
+    await markCallStatus(roomId, "ended", from);
+  } else if (kind === "offer" || kind === "answer") {
+    await markCallStatus(roomId, kind === "answer" ? "live" : "ringing", from);
+  }
   if (!isFirebaseConfigured()) return;
   const { db } = getFirebase();
   await addDoc(collection(db, "calls", roomId, "signals"), {
@@ -121,14 +179,39 @@ export function subscribeCallSignals(
   onSignal: (signal: CallSignal) => void,
   onError?: (message: string) => void,
 ): () => void {
-  const local = channel(roomId);
-  const onLocal = (event: MessageEvent<CallSignal>) => {
-    if (event.data?.kind && event.data.from) onSignal(event.data);
+  const seen = new Set<string>();
+  const deliver = (signal: CallSignal) => {
+    if (!signal?.kind || !signal.from || seen.has(signal.id)) return;
+    seen.add(signal.id);
+    onSignal(signal);
   };
+
+  const local = channel(roomId);
+  const onLocal = (event: MessageEvent<CallSignal>) => deliver(event.data);
   local?.addEventListener("message", onLocal);
 
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== lsKey(roomId) || !event.newValue) return;
+    try {
+      const list = JSON.parse(event.newValue) as CallSignal[];
+      const last = list[list.length - 1];
+      if (last) deliver(last);
+    } catch {
+      /* ignore */
+    }
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", onStorage);
+  }
+
   if (!isFirebaseConfigured()) {
-    return () => local?.close();
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[webrtc] Firebase missing — using BroadcastChannel + localStorage signaling (same browser only).");
+    }
+    return () => {
+      local?.close();
+      if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+    };
   }
 
   const { db } = getFirebase();
@@ -141,7 +224,7 @@ export function subscribeCallSignals(
         const kind = data.kind as SignalKind;
         const from = String(data.from ?? "");
         if (kind === "ice") {
-          onSignal({
+          deliver({
             id: change.doc.id,
             kind,
             from,
@@ -150,10 +233,10 @@ export function subscribeCallSignals(
           return;
         }
         if (kind === "hangup" || kind === "missed") {
-          onSignal({ id: change.doc.id, kind, from, payload: {} });
+          deliver({ id: change.doc.id, kind, from, payload: {} });
           return;
         }
-        onSignal({
+        deliver({
           id: change.doc.id,
           kind,
           from,
@@ -167,5 +250,6 @@ export function subscribeCallSignals(
   return () => {
     unsub();
     local?.close();
+    if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
   };
 }
