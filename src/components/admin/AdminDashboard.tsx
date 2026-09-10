@@ -1,133 +1,114 @@
 "use client";
 
-import { adminDeleteUser, adminSetDoctorVerified } from "@/lib/admin-actions";
-import { useCurrentUser, useStore } from "@/lib/store";
-import { useState } from "react";
+import { useStore } from "@/lib/store";
+import { CalendarDays, CheckCircle2, Clock, Stethoscope, Users, XCircle } from "lucide-react";
+import Link from "next/link";
+import type { ComponentType } from "react";
+
+function isSameDay(iso: string, ref: Date) {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  );
+}
+
+function Stat({
+  label,
+  value,
+  icon: Icon,
+  tone = "teal",
+}: {
+  label: string;
+  value: number;
+  icon: ComponentType<{ size?: number }>;
+  tone?: "teal" | "amber" | "rose" | "sage";
+}) {
+  const toneClass =
+    tone === "amber"
+      ? "bg-amber/15 text-amber"
+      : tone === "rose"
+        ? "bg-rose/15 text-rose"
+        : tone === "sage"
+          ? "bg-sage text-teal-dark"
+          : "bg-teal/15 text-teal";
+  return (
+    <div className="card flex items-center gap-4 p-5">
+      <span className={`grid h-12 w-12 place-items-center rounded-2xl ${toneClass}`}>
+        <Icon size={22} />
+      </span>
+      <div>
+        <p className="text-3xl font-semibold">{value}</p>
+        <p className="text-sm text-muted">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export function AdminDashboard() {
-  const { user: actor } = useCurrentUser();
-  const { state, deleteAccount, updateDoctor, hydrated } = useStore();
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const { state, hydrated } = useStore();
+  if (!hydrated) return <p className="text-muted">Loading dashboard…</p>;
 
-  if (!hydrated) return <p className="text-muted">Loading accounts…</p>;
-
-  const patients = state.users.filter((u) => u.role === "patient");
+  const today = new Date();
+  const bookings = state.bookings ?? [];
+  const bookingsToday = bookings.filter((b) => isSameDay(b.scheduledAt, today));
+  const pending = bookings.filter((b) => b.status === "upcoming");
+  const completed = bookings.filter((b) => b.status === "completed");
+  const cancelled = bookings.filter((b) => b.status === "cancelled");
   const doctors = state.users.filter((u) => u.role === "physio");
+  const activeDoctors = doctors.filter((u) => {
+    const p = state.doctors.find((d) => d.userId === u.id);
+    return p ? p.active !== false : true;
+  });
+  const patients = state.users.filter((u) => u.role === "patient");
 
-  async function removeUser(userId: string) {
-    setError("");
-    setBusyId(userId);
-    try {
-      const result = await adminDeleteUser(userId);
-      if (!result.ok) {
-        setError("Delete blocked. You are not the configured admin.");
-        return;
-      }
-      deleteAccount(result.userId);
-    } catch {
-      setError("Delete blocked. You are not the configured admin.");
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const upcomingSoon = [...pending]
+    .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+    .slice(0, 6);
 
-  async function setVerified(doctorId: string, isVerified: boolean) {
-    setError("");
-    setBusyId(doctorId);
-    try {
-      const result = await adminSetDoctorVerified(doctorId, isVerified);
-      if (!result.ok) {
-        setError("Verification change blocked. You are not the configured admin.");
-        return;
-      }
-      const doctor = state.doctors.find((d) => d.userId === result.doctorId);
-      if (doctor) updateDoctor({ ...doctor, isVerified: result.isVerified });
-    } catch {
-      setError("Verification change blocked. You are not the configured admin.");
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const doctorName = (id: string) => state.users.find((u) => u.id === id)?.name ?? id;
 
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-muted">Platform administration</p>
-        <h1 className="text-3xl font-semibold">Users</h1>
-        <p className="mt-1 text-muted">
-          Delete demo accounts and verify clinicians. Every action is re-checked on the server against{" "}
-          <code>ADMIN_UID</code> before it runs.
-        </p>
+        <p className="text-muted">Clinic overview</p>
+        <h1 className="text-3xl font-semibold">Dashboard</h1>
       </header>
-      {error && <p className="text-rose">{error}</p>}
 
-      <section className="card overflow-hidden">
-        <div className="border-b border-line px-5 py-4">
-          <h2 className="text-xl font-semibold">Patients</h2>
-        </div>
-        <ul className="divide-y divide-line">
-          {patients.map((u) => (
-            <li key={u.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-              <div>
-                <p className="font-semibold">{u.name}</p>
-                <p className="text-sm text-muted">
-                  {u.email} · {u.id}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={busyId === u.id || u.id === actor?.id}
-                onClick={() => void removeUser(u.id)}
-              >
-                Delete user
-              </button>
-            </li>
-          ))}
-        </ul>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Stat label="Bookings today" value={bookingsToday.length} icon={CalendarDays} tone="teal" />
+        <Stat label="Pending (upcoming)" value={pending.length} icon={Clock} tone="amber" />
+        <Stat label="Active doctors" value={activeDoctors.length} icon={Stethoscope} tone="sage" />
+        <Stat label="Total patients" value={patients.length} icon={Users} tone="teal" />
+        <Stat label="Completed" value={completed.length} icon={CheckCircle2} tone="sage" />
+        <Stat label="Cancelled" value={cancelled.length} icon={XCircle} tone="rose" />
       </section>
 
       <section className="card overflow-hidden">
-        <div className="border-b border-line px-5 py-4">
-          <h2 className="text-xl font-semibold">Doctors</h2>
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h2 className="text-xl font-semibold">Next upcoming bookings</h2>
+          <Link href="/admin/bookings" className="text-sm text-teal no-underline">
+            View all →
+          </Link>
         </div>
-        <ul className="divide-y divide-line">
-          {doctors.map((u) => {
-            const profile = state.doctors.find((d) => d.userId === u.id);
-            const verified = Boolean(profile?.isVerified);
-            return (
-              <li key={u.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+        {upcomingSoon.length === 0 ? (
+          <p className="px-5 py-6 text-muted">No upcoming bookings.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {upcomingSoon.map((b) => (
+              <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
                 <div>
-                  <p className="font-semibold">{u.name}</p>
-                  <p className="text-sm text-muted">
-                    {u.email} · {u.id}
-                    {verified ? " · verified" : " · pending"}
+                  <p className="font-medium">
+                    {b.patientName} <span className="text-muted">with {doctorName(b.physioId)}</span>
                   </p>
+                  <p className="text-sm text-muted">{b.reason}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={verified}
-                      disabled={!profile || busyId === u.id}
-                      onChange={(e) => void setVerified(u.id, e.target.checked)}
-                    />
-                    Verify doctor
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={busyId === u.id || u.id === actor?.id}
-                    onClick={() => void removeUser(u.id)}
-                  >
-                    Delete user
-                  </button>
-                </div>
+                <span className="text-sm text-muted">{new Date(b.scheduledAt).toLocaleString()}</span>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );
