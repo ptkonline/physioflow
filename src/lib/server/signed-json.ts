@@ -1,12 +1,18 @@
 const encoder = new TextEncoder();
 
 function signingSecret() {
-  return (
+  const configured =
     process.env.PAYMENT_SIGNING_SECRET?.trim() ||
     process.env.ADMIN_SESSION_SECRET?.trim() ||
     process.env.OTP_SECRET?.trim() ||
-    ""
-  );
+    "";
+  if (configured) return configured;
+  // Outside production, fall back to a fixed dev secret so the OTP flow works
+  // without extra configuration. Production still requires a real secret.
+  if (process.env.NODE_ENV !== "production") {
+    return "physioflow-dev-insecure-signing-secret";
+  }
+  return "";
 }
 
 export function canSignServerPayload() {

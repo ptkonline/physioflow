@@ -2,9 +2,11 @@
 
 import { DoctorRegisterForm } from "@/components/DoctorRegisterForm";
 import { Logo } from "@/components/Logo";
+import { OtpChallenge } from "@/components/OtpChallenge";
 import { CONDITIONS, GOALS } from "@/lib/seed";
 import { homePath } from "@/lib/paths";
 import { useStore } from "@/lib/store";
+import { useOtp } from "@/lib/use-otp";
 import type { Condition, Role } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,32 +30,9 @@ export default function RegisterPage() {
   const [hipaa, setHipaa] = useState(false);
   const [gdpr, setGdpr] = useState(false);
   const [otp, setOtp] = useState("");
-  const [challenge, setChallenge] = useState("");
-  const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  async function sendOtp() {
-    const res = await fetch("/api/auth/otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, purpose: "register" }),
-    });
-    const body = (await res.json()) as { error?: string; challengeToken?: string };
-    if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
-    setChallenge(body.challengeToken);
-    setAwaitingOtp(true);
-  }
-
-  async function verifyOtp() {
-    const res = await fetch("/api/auth/otp/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code: otp, challengeToken: challenge }),
-    });
-    const body = (await res.json()) as { error?: string; ok?: boolean };
-    if (!res.ok || !body.ok) throw new Error(body.error || "That code is not valid.");
-  }
+  const otpChallenge = useOtp();
 
   async function onPatientSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,11 +43,16 @@ export default function RegisterPage() {
     setBusy(true);
     setError("");
     try {
-      if (!awaitingOtp) {
-        await sendOtp();
+      if (!otpChallenge.awaiting) {
+        const sent = await otpChallenge.request({ email, phone, purpose: "register" });
+        if (!sent.ok) setError(sent.error ?? "Could not send the verification code.");
         return;
       }
-      await verifyOtp();
+      const verified = await otpChallenge.verify({ email, code: otp });
+      if (!verified.ok) {
+        setError(verified.error ?? "That code is not valid.");
+        return;
+      }
       const ok = await register({
         name,
         email,
@@ -196,23 +180,21 @@ export default function RegisterPage() {
               <input type="checkbox" className="mt-1 h-5 w-5" checked={gdpr} onChange={(e) => setGdpr(e.target.checked)} />
               <span>I agree to GDPR-style processing and understand I can export or delete my data.</span>
             </label>
-            {awaitingOtp && (
-              <label className="block space-y-1">
-                <span>Email verification code</span>
-                <input
-                  className="field tracking-[0.3em]"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  required
-                />
-              </label>
+            {otpChallenge.awaiting && (
+              <OtpChallenge
+                code={otp}
+                onCodeChange={setOtp}
+                channel={otpChallenge.channel}
+                devCode={otpChallenge.devCode}
+                resendIn={otpChallenge.resendIn}
+                expiresIn={otpChallenge.expiresIn}
+                expired={otpChallenge.expired}
+                onResend={() => void otpChallenge.resend()}
+              />
             )}
             {error && <p className="text-rose">{error}</p>}
             <button className="btn btn-primary w-full" type="submit" disabled={busy}>
-              {busy ? "Please wait…" : awaitingOtp ? "Verify and create profile" : "Send verification code"}
+              {busy ? "Please wait…" : otpChallenge.awaiting ? "Verify and create profile" : "Send verification code"}
             </button>
           </form>
         )}
