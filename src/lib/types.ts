@@ -1,6 +1,6 @@
 import type { DailyLog, DoctorLocation, DoctorPricing, ClinicLocation, Prescription, Review, VisitMode } from "./care-types";
 
-export type Role = "patient" | "physio";
+export type Role = "patient" | "physio" | "staff";
 
 export type Condition =
   | "knee"
@@ -68,6 +68,8 @@ export interface DoctorProfile {
   availability: WeekHours;
   photoUrl?: string;
   isVerified?: boolean;
+  /** Deactivated doctors are hidden from patient booking but kept for history. */
+  active?: boolean;
   location?: DoctorLocation;
   clinicLocation?: ClinicLocation;
   consultationFee?: number;
