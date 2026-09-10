@@ -59,6 +59,22 @@ export async function syncFirebaseAuth(
   }
 }
 
+/**
+ * Resolve once the Firebase Auth SDK has finished restoring any persisted
+ * session. Firestore reads/writes issued before this can be sent without an
+ * auth token and rejected by security rules, so chat/video write paths await
+ * this before their first operation (e.g. on a direct navigation or reload).
+ */
+export async function ensureAuthReady() {
+  const instance = getFirebaseAuth();
+  if (!instance) return;
+  try {
+    await instance.authStateReady();
+  } catch {
+    /* older SDKs / unsupported — best effort */
+  }
+}
+
 export async function requestPasswordReset(email: string) {
   const instance = getFirebaseAuth();
   if (!instance) {

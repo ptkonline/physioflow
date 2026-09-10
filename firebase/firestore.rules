@@ -46,7 +46,10 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read: if isChatMember(resource.data);
+      // resource is null when the document does not exist yet; a get() on a
+      // missing doc must resolve as "not found" rather than error, so clients
+      // can check-then-create a room.
+      allow read: if resource == null || isChatMember(resource.data);
       allow create: if signedIn()
         && request.resource.data.appointmentId == chatId
         && request.resource.data.patientId is string
@@ -77,7 +80,7 @@ service cloud.firestore {
     }
 
     match /calls/{roomId} {
-      allow read: if isChatMember(resource.data);
+      allow read: if resource == null || isChatMember(resource.data);
       allow create: if signedIn()
         && request.resource.data.patientId is string
         && request.resource.data.doctorId is string

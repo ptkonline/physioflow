@@ -948,6 +948,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (cached?.currentUserId) {
       const user = cached.users.find((u) => u.id === cached.currentUserId);
       if (user) setAuthCookies(user.role, user.id);
+      // Initialize the Firebase Auth SDK here (a layout effect, which runs
+      // before child passive effects) so its persisted session is restored and
+      // Firestore has an auth token BEFORE ChatWindow / VideoRoom issue their
+      // first reads/writes on a direct navigation or reload. Without this,
+      // Firestore requests race auth init and are denied (chat "Saved offline",
+      // video never connects).
+      getFirebaseAuth();
     }
     setHydrated(true);
 
