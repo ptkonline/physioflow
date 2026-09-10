@@ -1,11 +1,17 @@
 import type { Role } from "./types";
 
 export function homePath(role: Role) {
-  return role === "physio" ? "/doctor/dashboard" : "/patient/dashboard";
+  if (role === "physio") return "/doctor/dashboard";
+  if (role === "staff") return "/staff/bookings";
+  return "/patient/dashboard";
 }
 
 export function isPatientPath(pathname: string) {
   return pathname === "/patient" || pathname.startsWith("/patient/");
+}
+
+export function isStaffPath(pathname: string) {
+  return pathname === "/staff" || pathname.startsWith("/staff/");
 }
 
 export function isDoctorOnboardingPath(pathname: string) {

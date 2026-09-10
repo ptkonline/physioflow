@@ -277,6 +277,17 @@ export const seedState: AppState = {
       consentGdpr: true,
       createdAt: iso(-180),
     },
+    {
+      id: "staff-riya",
+      name: "Riya (Front desk)",
+      email: "staff@demo.physio",
+      password: "",
+      passwordHash: DEMO_PASSWORD_HASH,
+      role: "staff",
+      consentHipaa: true,
+      consentGdpr: true,
+      createdAt: iso(-300),
+    },
   ],
   profiles: [
     {

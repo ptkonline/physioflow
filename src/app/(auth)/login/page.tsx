@@ -3,6 +3,7 @@
 import { Logo } from "@/components/Logo";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { issueAdminSession } from "@/lib/admin-actions";
+import { homePath } from "@/lib/paths";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { User } from "@/lib/types";
 import { useTranslations } from "next-intl";
@@ -46,7 +47,7 @@ function LoginForm() {
       }
       const role = user.role;
       // Honor next only when it matches the signed-in role's portal.
-      if (next && !next.startsWith("/staff")) {
+      if (next) {
         if (role === "physio" && (next.startsWith("/doctor") || next.startsWith("/physio"))) {
           router.replace(next);
           return;
@@ -55,9 +56,12 @@ function LoginForm() {
           router.replace(next);
           return;
         }
+        if (role === "staff" && next.startsWith("/staff")) {
+          router.replace(next);
+          return;
+        }
       }
-      if (role === "physio") router.replace("/doctor/dashboard");
-      else router.replace("/patient/dashboard");
+      router.replace(homePath(role));
     })();
     return () => {
       cancelled = true;

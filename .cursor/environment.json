@@ -9,8 +9,8 @@
     },
     {
       "name": "next-dev",
-      "command": "NEXT_PUBLIC_FIREBASE_USE_EMULATOR=true npm run dev",
-      "description": "Next.js dev server on http://localhost:3000, wired to the local Firebase emulators."
+      "command": "NEXT_PUBLIC_FIREBASE_USE_EMULATOR=true ADMIN_EMAIL=james@demo.physio ADMIN_UID=physio-james ADMIN_SESSION_SECRET=dev-admin-secret npm run dev",
+      "description": "Next.js dev server on http://localhost:3000, wired to the local Firebase emulators. Demo admin = james@demo.physio (physio-james)."
     }
   ],
   "ports": [

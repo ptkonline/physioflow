@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ADMIN_COOKIE, adminEnv, isAdminPath, readAdminToken } from "@/lib/admin-session";
 import { ROLE_COOKIE, UID_COOKIE } from "@/lib/auth-session";
-import { isDoctorOnboardingPath, isDoctorPath, isPatientPath } from "@/lib/paths";
+import { isDoctorOnboardingPath, isDoctorPath, isPatientPath, isStaffPath } from "@/lib/paths";
 
 async function guardAdmin(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -52,6 +52,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (isStaffPath(pathname)) {
+    if (!role) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+    if (role !== "staff") {
+      const home = role === "patient" ? "/patient/dashboard" : "/doctor/dashboard";
+      return NextResponse.redirect(new URL(home, request.url));
+    }
+    return NextResponse.next();
+  }
+
   if (!isPatientPath(pathname) && !isDoctorPath(pathname)) {
     return NextResponse.next();
   }
@@ -61,6 +75,10 @@ export async function proxy(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
+  }
+
+  if (role === "staff") {
+    return NextResponse.redirect(new URL("/staff/bookings", request.url));
   }
 
   if (role === "patient" && isDoctorPath(pathname)) {
@@ -80,9 +98,11 @@ export const config = {
     "/patient/:path*",
     "/doctor/:path*",
     "/physio/:path*",
+    "/staff/:path*",
     "/patient",
     "/doctor",
     "/physio",
+    "/staff",
     "/admin",
     "/admin/:path*",
   ],
