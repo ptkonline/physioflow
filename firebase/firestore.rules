@@ -102,6 +102,12 @@ service cloud.firestore {
           && request.resource.data.kind in ['offer', 'answer', 'ice', 'hangup', 'missed'];
         allow update, delete: if false;
       }
+
+      match /metadata/{docId} {
+        allow read, write: if isChatMember(
+          get(/databases/$(database)/documents/calls/$(roomId)).data
+        );
+      }
     }
 
     match /videos/{videoId} {
@@ -110,7 +116,7 @@ service cloud.firestore {
         && request.resource.data.title is string
         && request.resource.data.videoUrl is string;
       allow update, delete: if signedIn() && resource.data.doctorId == request.auth.uid;
-      allow read: if resource.data.isPublic == true || signedIn();
+      allow read: if resource.data.get("isPublic", false) == true || signedIn();
     }
 
     match /users/{userId} {

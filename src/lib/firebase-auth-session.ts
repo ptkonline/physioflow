@@ -1,4 +1,5 @@
 import {
+  connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
   sendEmailVerification,
@@ -8,14 +9,25 @@ import {
   type Auth,
   type User,
 } from "firebase/auth";
-import { isFirebaseConfigured } from "./firebase-config";
+import { isFirebaseConfigured, emulatorEnabled } from "./firebase-config";
 import { getFirebase } from "./firebase";
 
 let auth: Auth | undefined;
 
 export function getFirebaseAuth() {
   if (!isFirebaseConfigured()) return null;
-  if (!auth) auth = getAuth(getFirebase().app);
+  if (!auth) {
+    auth = getAuth(getFirebase().app);
+    if (emulatorEnabled()) {
+      const host = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST?.trim() || "127.0.0.1";
+      const port = Number.parseInt(process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT ?? "", 10) || 9099;
+      try {
+        connectAuthEmulator(auth, `http://${host}:${port}`, { disableWarnings: true });
+      } catch {
+        /* already connected (HMR) */
+      }
+    }
+  }
   return auth;
 }
 
