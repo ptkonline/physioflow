@@ -3,7 +3,9 @@
 import { RatingAndReview } from "@/components/reviews/RatingAndReview";
 import { SlotCalendar } from "@/components/SlotCalendar";
 import { formatSlot } from "@/lib/availability";
+import { consultHref } from "@/lib/call-window";
 import { useCurrentUser, useStore } from "@/lib/store";
+import { Video } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -89,7 +91,12 @@ export function BookingList({
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href={`${chatBase}/${b.id}`} className="btn btn-primary">
+                {b.mode !== "offline" && (
+                  <Link href={b.meetingLink || consultHref(b.consultId)} className="btn btn-primary">
+                    <Video size={16} /> Video
+                  </Link>
+                )}
+                <Link href={`${chatBase}/${b.id}`} className="btn btn-ghost">
                   Open chat
                 </Link>
                 <Link
@@ -98,11 +105,6 @@ export function BookingList({
                 >
                   Details
                 </Link>
-                {b.mode !== "offline" && (
-                  <Link href={b.meetingLink || `/consult/${b.consultId}`} className="btn btn-ghost">
-                    Open visit
-                  </Link>
-                )}
                 <Link href={`${rxBase}?booking=${b.id}`} className="btn btn-ghost">
                   Prescriptions
                 </Link>
