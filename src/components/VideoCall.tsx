@@ -41,6 +41,7 @@ export function VideoCall({ consultId }: { consultId: string }) {
           doctorId: consult.physioId,
           patientEmail: patient.email,
           doctorEmail: doctor.email,
+          localEmail: user.email,
         }}
         localUserId={user.id}
         localName={user.name}

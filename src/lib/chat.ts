@@ -15,6 +15,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import type { ChatMessage, ChatRoom, MessageType } from "./care-types";
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
+import { ensureFirebaseSession } from "./firebase-auth-session";
 import { compressImage, fileToDataUrl } from "./image";
 
 const LOCAL_CHATS = "physioflow.chats";
@@ -41,12 +42,26 @@ export function chatIdFor(appointmentId: string) {
   return appointmentId;
 }
 
+async function ensureChatAuth(email?: string) {
+  await ensureFirebaseSession(email);
+}
+
+function ensureLocalRoom(room: ChatRoom) {
+  const all = localRooms();
+  if (!all[room.id]) {
+    all[room.id] = { room, messages: [] };
+    saveLocal(all);
+  }
+  return all[room.id].room;
+}
+
 export async function ensureChatRoom(input: {
   appointmentId: string;
   patientId: string;
   doctorId: string;
   patientEmail?: string;
   doctorEmail?: string;
+  localEmail?: string;
 }): Promise<ChatRoom> {
   const id = chatIdFor(input.appointmentId);
   const room: ChatRoom = {
@@ -57,29 +72,28 @@ export async function ensureChatRoom(input: {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  if (!isFirebaseConfigured()) {
-    const all = localRooms();
-    if (!all[id]) {
-      all[id] = { room, messages: [] };
-      saveLocal(all);
+  ensureLocalRoom(room);
+  if (!isFirebaseConfigured()) return room;
+  await ensureChatAuth(input.localEmail || input.patientEmail || input.doctorEmail);
+  try {
+    const { db } = getFirebase();
+    const refDoc = doc(db, "chats", id);
+    const existing = await getDoc(refDoc);
+    const payload = {
+      appointmentId: input.appointmentId,
+      patientId: input.patientId,
+      doctorId: input.doctorId,
+      patientEmail: (input.patientEmail ?? "").trim().toLowerCase(),
+      doctorEmail: (input.doctorEmail ?? "").trim().toLowerCase(),
+      updatedAt: serverTimestamp(),
+    };
+    if (!existing.exists()) {
+      await setDoc(refDoc, { ...payload, createdAt: serverTimestamp() });
+    } else {
+      await setDoc(refDoc, payload, { merge: true });
     }
-    return all[id].room;
-  }
-  const { db } = getFirebase();
-  const refDoc = doc(db, "chats", id);
-  const existing = await getDoc(refDoc);
-  const payload = {
-    appointmentId: input.appointmentId,
-    patientId: input.patientId,
-    doctorId: input.doctorId,
-    patientEmail: (input.patientEmail ?? "").trim().toLowerCase(),
-    doctorEmail: (input.doctorEmail ?? "").trim().toLowerCase(),
-    updatedAt: serverTimestamp(),
-  };
-  if (!existing.exists()) {
-    await setDoc(refDoc, { ...payload, createdAt: serverTimestamp() });
-  } else {
-    await setDoc(refDoc, payload, { merge: true });
+  } catch (err) {
+    console.warn("[chat] Firestore room unavailable, using local thread", err);
   }
   return room;
 }
@@ -110,7 +124,24 @@ export function subscribeMessages(
     orderBy("createdAt", "desc"),
     limit(PAGE_SIZE),
   );
-  return onSnapshot(
+  let lastRemote: ChatMessage[] = [];
+  const merge = (remote?: ChatMessage[]) => {
+    if (remote) lastRemote = remote;
+    const local = localRooms()[id]?.messages ?? [];
+    const keys = new Set(lastRemote.map((m) => `${m.senderId}|${m.text}|${m.href ?? ""}`));
+    const extras = local.filter((m) => !keys.has(`${m.senderId}|${m.text}|${m.href ?? ""}`));
+    onChange(
+      [...lastRemote, ...extras].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    );
+  };
+  merge();
+  const localHandler = () => merge();
+  const bc = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(`pf-chat-${id}`);
+  bc?.addEventListener("message", localHandler);
+  bus?.addEventListener("chats", localHandler);
+  window.addEventListener("storage", localHandler);
+
+  const unsubRemote = onSnapshot(
     q,
     (snap) => {
       const rows = snap.docs
@@ -132,20 +163,57 @@ export function subscribeMessages(
           } satisfies ChatMessage;
         })
         .reverse();
-      onChange(rows);
+      merge(rows);
     },
-    (err) => onError?.(err.message),
+    () => {
+      merge();
+    },
   );
+
+  return () => {
+    unsubRemote();
+    bc?.close();
+    bus?.removeEventListener("chats", localHandler);
+    window.removeEventListener("storage", localHandler);
+  };
+}
+
+function persistLocalMessage(id: string, message: ChatMessage) {
+  const all = localRooms();
+  if (!all[id]) {
+    all[id] = {
+      room: {
+        id,
+        appointmentId: id,
+        patientId: "",
+        doctorId: "",
+        createdAt: message.createdAt,
+        updatedAt: message.createdAt,
+      },
+      messages: [],
+    };
+  }
+  all[id].messages.push(message);
+  all[id].room.updatedAt = message.createdAt;
+  saveLocal(all);
+  if (typeof BroadcastChannel !== "undefined") {
+    new BroadcastChannel(`pf-chat-${id}`).postMessage({ type: "chats" });
+  }
 }
 
 async function uploadChatFile(appointmentId: string, file: File, kind: "image" | "file") {
   const ready = kind === "image" ? await compressImage(file, 1280, 0.75) : file;
   if (!isFirebaseConfigured()) return fileToDataUrl(ready);
-  const { storage } = getFirebase();
-  const path = `chats/${appointmentId}/${kind}-${Date.now()}-${ready.name.replace(/[^\w.\-]+/g, "_")}`;
-  const fileRef = ref(storage, path);
-  await uploadBytes(fileRef, ready, { contentType: ready.type });
-  return getDownloadURL(fileRef);
+  try {
+    const { storage } = getFirebase();
+    const path = `chats/${appointmentId}/${kind}-${Date.now()}-${ready.name.replace(/[^\w.\-]+/g, "_")}`;
+    const fileRef = ref(storage, path);
+    await uploadBytes(fileRef, ready, { contentType: ready.type });
+    return getDownloadURL(fileRef);
+  } catch (err) {
+    console.warn("[chat] Storage upload failed, using inline file", err);
+    return fileToDataUrl(ready);
+  }
 }
 
 export async function sendChatMessage(input: {
@@ -186,27 +254,25 @@ export async function sendChatMessage(input: {
     createdAt: new Date().toISOString(),
   };
   if (!isFirebaseConfigured()) {
-    const all = localRooms();
-    if (!all[id]) return;
-    all[id].messages.push(message);
-    all[id].room.updatedAt = message.createdAt;
-    saveLocal(all);
-    if (typeof BroadcastChannel !== "undefined") {
-      new BroadcastChannel(`pf-chat-${id}`).postMessage({ type: "chats" });
-    }
+    persistLocalMessage(id, message);
     return;
   }
-  const { db } = getFirebase();
-  await addDoc(collection(db, "chats", id, "messages"), {
-    senderId: message.senderId,
-    text: message.text,
-    imageUrl: imageUrl ?? null,
-    fileUrl: fileUrl ?? null,
-    videoId: message.videoId ?? null,
-    videoUrl: message.videoUrl ?? null,
-    videoTitle: message.videoTitle ?? null,
-    href: message.href ?? null,
-    type,
-    createdAt: serverTimestamp(),
-  });
+  persistLocalMessage(id, message);
+  try {
+    const { db } = getFirebase();
+    await addDoc(collection(db, "chats", id, "messages"), {
+      senderId: message.senderId,
+      text: message.text,
+      imageUrl: imageUrl ?? null,
+      fileUrl: fileUrl ?? null,
+      videoId: message.videoId ?? null,
+      videoUrl: message.videoUrl ?? null,
+      videoTitle: message.videoTitle ?? null,
+      href: message.href ?? null,
+      type,
+      createdAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn("[chat] Firestore send failed, kept local copy", err);
+  }
 }

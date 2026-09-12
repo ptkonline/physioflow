@@ -52,6 +52,7 @@ export function CareChatPage({ portal }: { portal: "patient" | "doctor" }) {
         patientEmail={state.users.find((u) => u.id === booking.patientId)?.email ?? booking.patientEmail}
         doctorEmail={state.users.find((u) => u.id === booking.physioId)?.email ?? ""}
         currentUserId={user.id}
+        currentUserEmail={user.email}
         currentIsPatient={user.role === "patient"}
       />
     </div>

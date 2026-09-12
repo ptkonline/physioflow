@@ -14,14 +14,29 @@ export async function registerPushToken(userId: string, email: string) {
   const messaging = getMessaging(app);
   const token = await getToken(messaging, { vapidKey: vapid });
   if (!token) return null;
-  await setDoc(
-    doc(db, "users", userId),
-    {
-      email: email.trim().toLowerCase(),
-      fcmToken: token,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      doc(db, "users", userId),
+      {
+        email: email.trim().toLowerCase(),
+        fcmToken: token,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch {
+    const authUid = (await import("firebase/auth")).getAuth(app).currentUser?.uid;
+    if (authUid) {
+      await setDoc(
+        doc(db, "users", authUid),
+        {
+          email: email.trim().toLowerCase(),
+          fcmToken: token,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+  }
   return token;
 }

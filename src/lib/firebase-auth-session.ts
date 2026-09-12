@@ -60,3 +60,18 @@ export async function clearFirebaseAuth() {
   if (!instance?.currentUser) return;
   await signOut(instance);
 }
+
+/** Sign into Firebase Auth so Firestore rules (email match) can succeed. */
+export async function ensureFirebaseSession(email?: string) {
+  const instance = getFirebaseAuth();
+  if (!instance) return null;
+  const normalized = (email ?? "").trim().toLowerCase();
+  if (!normalized) return instance.currentUser;
+  if (instance.currentUser?.email?.toLowerCase() === normalized) {
+    return instance.currentUser;
+  }
+  if (normalized.endsWith("@demo.physio")) {
+    return syncFirebaseAuth(normalized, "demo123", { createIfMissing: true });
+  }
+  return instance.currentUser;
+}

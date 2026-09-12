@@ -26,8 +26,8 @@ export function OfflineSync() {
     if (!hydrated) return;
 
     async function flush() {
-      if (!navigator.onLine) {
-        setNote("Offline — chat and check-ins will sync when you reconnect.");
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setNote("You're offline. Chat and check-ins will sync when you reconnect.");
         return;
       }
       const queue = await readOfflineQueue();
@@ -66,7 +66,7 @@ export function OfflineSync() {
 
     void flush();
     const onOnline = () => void flush();
-    const onOffline = () => setNote("Offline — chat and check-ins will sync when you reconnect.");
+    const onOffline = () => setNote("You're offline. Chat and check-ins will sync when you reconnect.");
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     return () => {

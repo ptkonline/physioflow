@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
+import { ensureFirebaseSession } from "./firebase-auth-session";
 
 export type SignalKind = "offer" | "answer" | "ice" | "hangup" | "missed";
 
@@ -41,7 +42,14 @@ export type CallRoomMeta = {
   doctorId: string;
   patientEmail: string;
   doctorEmail: string;
+  localEmail?: string;
 };
+
+async function readyForFirestore(meta?: CallRoomMeta) {
+  if (!isFirebaseConfigured()) return false;
+  await ensureFirebaseSession(meta?.localEmail || meta?.patientEmail || meta?.doctorEmail);
+  return true;
+}
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
@@ -83,21 +91,25 @@ function publishLocalSignal(roomId: string, body: CallSignal) {
 }
 
 export async function ensureCallRoom(meta: CallRoomMeta) {
-  if (!isFirebaseConfigured()) return;
-  const { db } = getFirebase();
-  await setDoc(
-    doc(db, "calls", meta.roomId),
-    {
-      appointmentId: meta.appointmentId,
-      patientId: meta.patientId,
-      doctorId: meta.doctorId,
-      patientEmail: meta.patientEmail.trim().toLowerCase(),
-      doctorEmail: meta.doctorEmail.trim().toLowerCase(),
-      status: "ringing" satisfies CallStatus,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  if (!(await readyForFirestore(meta))) return;
+  try {
+    const { db } = getFirebase();
+    await setDoc(
+      doc(db, "calls", meta.roomId),
+      {
+        appointmentId: meta.appointmentId,
+        patientId: meta.patientId,
+        doctorId: meta.doctorId,
+        patientEmail: meta.patientEmail.trim().toLowerCase(),
+        doctorEmail: meta.doctorEmail.trim().toLowerCase(),
+        status: "ringing" satisfies CallStatus,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    console.warn("[webrtc] call room write skipped", err);
+  }
 }
 
 export async function markCallStatus(
@@ -121,9 +133,13 @@ export async function markCallStatus(
     }
   }
   if (!isFirebaseConfigured()) return;
-  const { db } = getFirebase();
-  await setDoc(doc(db, "calls", roomId), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
-  await setDoc(doc(db, "calls", roomId, "metadata", "current"), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
+  try {
+    const { db } = getFirebase();
+    await setDoc(doc(db, "calls", roomId), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, "calls", roomId, "metadata", "current"), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    console.warn("[webrtc] call metadata write skipped", err);
+  }
 }
 
 export async function sendCallSignal(
@@ -165,13 +181,17 @@ export async function sendCallSignal(
     await markCallStatus(roomId, kind === "answer" ? "live" : "ringing", from);
   }
   if (!isFirebaseConfigured()) return;
-  const { db } = getFirebase();
-  await addDoc(collection(db, "calls", roomId, "signals"), {
-    kind,
-    from,
-    payload,
-    createdAt: serverTimestamp(),
-  });
+  try {
+    const { db } = getFirebase();
+    await addDoc(collection(db, "calls", roomId, "signals"), {
+      kind,
+      from,
+      payload,
+      createdAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn("[webrtc] signal write skipped", err);
+  }
 }
 
 export function subscribeCallSignals(
@@ -244,7 +264,14 @@ export function subscribeCallSignals(
         });
       });
     },
-    (err) => onError?.(err.message),
+    (err) => {
+      const msg = err.message || "";
+      if (/permission|insufficient/i.test(msg)) {
+        console.warn("[webrtc] signaling permission denied — local fallback");
+        return;
+      }
+      onError?.(msg);
+    },
   );
 
   return () => {

@@ -16,6 +16,7 @@ export function ChatWindow({
   patientEmail,
   doctorEmail,
   currentUserId,
+  currentUserEmail,
   currentIsPatient,
 }: {
   appointmentId: string;
@@ -24,6 +25,7 @@ export function ChatWindow({
   patientEmail: string;
   doctorEmail: string;
   currentUserId: string;
+  currentUserEmail?: string;
   currentIsPatient: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -38,7 +40,14 @@ export function ChatWindow({
   useEffect(() => {
     let cancelled = false;
     let unsub = () => {};
-    void ensureChatRoom({ appointmentId, patientId, doctorId, patientEmail, doctorEmail })
+    void ensureChatRoom({
+      appointmentId,
+      patientId,
+      doctorId,
+      patientEmail,
+      doctorEmail,
+      localEmail: currentUserEmail,
+    })
       .then(() => {
         if (cancelled) return;
         unsub = subscribeMessages(appointmentId, setMessages, setError);
@@ -51,7 +60,7 @@ export function ChatWindow({
       cancelled = true;
       unsub();
     };
-  }, [appointmentId, patientId, doctorId, patientEmail, doctorEmail]);
+  }, [appointmentId, patientId, doctorId, patientEmail, doctorEmail, currentUserEmail]);
 
   useEffect(() => {
     if (currentIsPatient) return;
@@ -66,8 +75,9 @@ export function ChatWindow({
     if (busy) return;
     if (!file && !video && !text.trim()) return;
     setBusy(true);
+    const payloadText = video ? text || `Exercise: ${video.title}` : text;
     try {
-      if (!navigator.onLine) {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         await enqueueOffline({
           id: crypto.randomUUID(),
           kind: "chat",
@@ -75,7 +85,7 @@ export function ChatWindow({
           payload: {
             appointmentId,
             senderId: currentUserId,
-            text: video ? text || `Exercise: ${video.title}` : text,
+            text: payloadText,
             patientId,
             doctorId,
             patientEmail,
@@ -84,13 +94,13 @@ export function ChatWindow({
         });
         setText("");
         setPicker(false);
-        setError("Saved offline. It will send when you are back online.");
+        setError("You're offline. The message is queued and will send when you reconnect.");
         return;
       }
       await sendChatMessage({
         appointmentId,
         senderId: currentUserId,
-        text: video ? text || `Exercise: ${video.title}` : text,
+        text: payloadText,
         file,
         videoId: video?.id,
         videoUrl: video?.videoUrl,
@@ -98,7 +108,8 @@ export function ChatWindow({
       });
       setText("");
       setPicker(false);
-    } catch {
+      setError("");
+    } catch (err) {
       await enqueueOffline({
         id: crypto.randomUUID(),
         kind: "chat",
@@ -106,7 +117,7 @@ export function ChatWindow({
         payload: {
           appointmentId,
           senderId: currentUserId,
-          text,
+          text: payloadText,
           patientId,
           doctorId,
           patientEmail,
@@ -114,7 +125,7 @@ export function ChatWindow({
         },
       });
       setText("");
-      setError("Saved offline. It will send when you are back online.");
+      setError(err instanceof Error ? err.message : "Could not send. Saved to retry shortly.");
     } finally {
       setBusy(false);
     }

@@ -19,6 +19,7 @@ export async function alertPatientCallStarted(input: {
     doctorId: booking.physioId,
     patientEmail: patient.email || booking.patientEmail,
     doctorEmail: doctor.email,
+    localEmail: doctor.email,
   });
 
   await sendChatMessage({
@@ -36,6 +37,7 @@ export async function alertPatientCallStarted(input: {
     doctorId: booking.physioId,
     patientEmail: patient.email || booking.patientEmail,
     doctorEmail: doctor.email,
+    localEmail: doctor.email,
   });
   await markCallStatus(booking.consultId, "ringing", doctor.id, { appointmentId: booking.id });
 

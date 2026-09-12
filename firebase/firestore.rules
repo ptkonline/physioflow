@@ -77,7 +77,10 @@ service cloud.firestore {
     }
 
     match /calls/{roomId} {
-      allow read: if isChatMember(resource.data);
+      allow get, list: if signedIn() && (
+        resource == null
+        || isChatMember(resource.data)
+      );
       allow create: if signedIn()
         && request.resource.data.patientId is string
         && request.resource.data.doctorId is string
@@ -92,15 +95,27 @@ service cloud.firestore {
         && isChatMember(resource.data);
       allow delete: if isChatMember(resource.data);
 
+      function callParent() {
+        return get(/databases/$(database)/documents/calls/$(roomId)).data;
+      }
+
       match /signals/{signalId} {
-        allow read: if isChatMember(
-          get(/databases/$(database)/documents/calls/$(roomId)).data
+        allow read: if signedIn() && (
+          !exists(/databases/$(database)/documents/calls/$(roomId))
+          || isChatMember(callParent())
         );
         allow create: if signedIn()
-          && isChatMember(get(/databases/$(database)/documents/calls/$(roomId)).data)
+          && isChatMember(callParent())
           && request.resource.data.from is string
           && request.resource.data.kind in ['offer', 'answer', 'ice', 'hangup', 'missed'];
         allow update, delete: if false;
+      }
+
+      match /metadata/{id} {
+        allow read, write: if signedIn() && (
+          !exists(/databases/$(database)/documents/calls/$(roomId))
+          || isChatMember(callParent())
+        );
       }
     }
 
@@ -114,8 +129,15 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isPlatformAdmin());
-      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && (
+        request.auth.uid == userId
+        || emailIs(resource.data.email)
+        || isPlatformAdmin()
+      );
+      allow create, update: if signedIn() && (
+        request.auth.uid == userId
+        || emailIs(request.resource.data.email)
+      );
       allow delete: if isPlatformAdmin();
     }
 
