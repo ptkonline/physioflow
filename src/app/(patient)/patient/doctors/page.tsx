@@ -15,7 +15,11 @@ export default function PatientDoctors() {
   const { state } = useStore();
   const [here, setHere] = useState<{ latitude: number; longitude: number } | null>(null);
   const [geoNote, setGeoNote] = useState("Allow location to sort doctors by distance.");
-  const doctors = state.users.filter((u) => u.role === "physio");
+  const doctors = state.users.filter((u) => {
+    if (u.role !== "physio") return false;
+    const profile = state.doctors.find((d) => d.userId === u.id);
+    return profile ? profile.active !== false : true;
+  });
 
   useEffect(() => {
     const cached = readPatientCoords();

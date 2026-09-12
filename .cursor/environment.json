@@ -1,0 +1,26 @@
+{
+  "name": "PhysioFlow",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "firebase-emulators",
+      "command": "npm run emulators",
+      "description": "Firebase Emulator Suite (Auth 9099, Firestore 8080, Storage 9199, UI 4000). Powers cross-user chat and video signaling in local dev."
+    },
+    {
+      "name": "next-dev",
+      "command": "NEXT_PUBLIC_FIREBASE_USE_EMULATOR=true ADMIN_EMAIL=james@demo.physio ADMIN_UID=physio-james ADMIN_SESSION_SECRET=dev-admin-secret npm run dev",
+      "description": "Next.js dev server on http://localhost:3000, wired to the local Firebase emulators. Demo admin = james@demo.physio (physio-james)."
+    }
+  ],
+  "ports": [
+    {
+      "name": "web",
+      "port": 3000
+    },
+    {
+      "name": "firebase-emulator-ui",
+      "port": 4000
+    }
+  ]
+}

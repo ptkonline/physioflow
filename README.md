@@ -5,12 +5,33 @@ A Physitrack-style physiotherapy web app: programs, exercise videos, telehealth,
 ## Run
 
 ```bash
-cd physioflow
 npm install
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### Chat & video in local development
+
+Real-time chat and the video visit signaling run on Firebase (Firestore + Auth).
+Because one browser can only hold one logged-in user, a patient and a doctor must
+be two independent clients with a shared backend — the in-browser fallback cannot
+connect them. For local development you don't need a real Firebase project: run
+the Firebase Emulator Suite and point the app at it.
+
+```bash
+# terminal 1 — Auth + Firestore + Storage emulators (needs Java, already vendored via firebase-tools)
+npm run emulators
+
+# terminal 2 — dev server wired to the emulators
+NEXT_PUBLIC_FIREBASE_USE_EMULATOR=true npm run dev
+```
+
+Then log in as the patient in one browser and the doctor in another (a second
+profile or an incognito window) and open the same appointment. Demo Auth users
+are created automatically on first login. To use a real Firebase project instead,
+leave `NEXT_PUBLIC_FIREBASE_USE_EMULATOR` unset and fill in `NEXT_PUBLIC_FIREBASE_*`
+(see `.env.example`).
 
 ## Demo accounts
 

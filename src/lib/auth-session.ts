@@ -3,10 +3,12 @@ import type { Role } from "./types";
 export const ROLE_COOKIE = "pf_role";
 export const UID_COOKIE = "pf_uid";
 
-export type PortalRole = "patient" | "doctor";
+export type PortalRole = "patient" | "doctor" | "staff";
 
 export function portalRole(role: Role): PortalRole {
-  return role === "physio" ? "doctor" : "patient";
+  if (role === "physio") return "doctor";
+  if (role === "staff") return "staff";
+  return "patient";
 }
 
 export function setAuthCookies(role: Role, userId: string) {

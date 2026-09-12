@@ -1,6 +1,7 @@
 "use client";
 
 import { LocationSelector } from "@/components/maps/LocationSelector";
+import { OtpChallenge } from "@/components/OtpChallenge";
 import {
   DEGREES,
   SPECIALIZATIONS,
@@ -8,6 +9,7 @@ import {
   doctorRegisterSchema,
   type DoctorRegisterValues,
 } from "@/lib/doctor-register-schema";
+import { useOtp } from "@/lib/use-otp";
 import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -41,9 +43,8 @@ export function DoctorRegisterForm() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [otp, setOtp] = useState("");
-  const [challenge, setChallenge] = useState("");
-  const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const otpChallenge = useOtp();
   const form = useForm<DoctorRegisterValues>({
     resolver: zodResolver(doctorRegisterSchema),
     defaultValues: {
@@ -88,25 +89,16 @@ export function DoctorRegisterForm() {
   async function onSubmit(values: DoctorRegisterValues) {
     setSubmitError("");
     try {
-      if (!awaitingOtp) {
-        const res = await fetch("/api/auth/otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: values.email, purpose: "register" }),
-        });
-        const body = (await res.json()) as { error?: string; challengeToken?: string };
-        if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
-        setChallenge(body.challengeToken);
-        setAwaitingOtp(true);
+      if (!otpChallenge.awaiting) {
+        const sent = await otpChallenge.request({ email: values.email, phone: values.phone, purpose: "register" });
+        if (!sent.ok) setSubmitError(sent.error ?? "Could not send the verification code.");
         return;
       }
-      const verified = await fetch("/api/auth/otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: values.email, code: otp, challengeToken: challenge }),
-      });
-      const body = (await verified.json()) as { error?: string; ok?: boolean };
-      if (!verified.ok || !body.ok) throw new Error(body.error || "That code is not valid.");
+      const verified = await otpChallenge.verify({ email: values.email, code: otp });
+      if (!verified.ok) {
+        setSubmitError(verified.error ?? "That code is not valid.");
+        return;
+      }
       const { submitDoctorApplication } = await import("@/lib/submit-doctor-application");
       await submitDoctorApplication(values);
       router.replace("/register/pending");
@@ -297,19 +289,17 @@ export function DoctorRegisterForm() {
         </div>
       )}
 
-      {awaitingOtp && (
-        <label className="block space-y-1">
-          <span>Email verification code</span>
-          <input
-            className="field tracking-[0.3em]"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            required
-          />
-        </label>
+      {otpChallenge.awaiting && (
+        <OtpChallenge
+          code={otp}
+          onCodeChange={setOtp}
+          channel={otpChallenge.channel}
+          devCode={otpChallenge.devCode}
+          resendIn={otpChallenge.resendIn}
+          expiresIn={otpChallenge.expiresIn}
+          expired={otpChallenge.expired}
+          onResend={() => void otpChallenge.resend()}
+        />
       )}
       {submitError && <p className="text-rose">{submitError}</p>}
 
@@ -325,7 +315,7 @@ export function DoctorRegisterForm() {
           </button>
         ) : (
           <button className="btn btn-primary flex-1" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Please wait…" : awaitingOtp ? "Verify and submit" : "Send code and submit"}
+            {isSubmitting ? "Please wait…" : otpChallenge.awaiting ? "Verify and submit" : "Send code and submit"}
           </button>
         )}
       </div>

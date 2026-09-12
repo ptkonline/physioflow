@@ -30,7 +30,7 @@ import type {
 } from "./types";
 import { DEFAULT_HOURS } from "./types";
 import type { DailyLog, Prescription, Review } from "./care-types";
-import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
+import { clearFirebaseAuth, getFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
 import { comparePassword, hashPassword, hasLocalCredential, isPasswordHashed, needsBcryptUpgrade, stripUserSecrets } from "./password";
 import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
 import { revokeAdminSession } from "./admin-actions";
@@ -151,6 +151,22 @@ type Action =
   | { type: "setConsultStatus"; id: string; status: Consult["status"] }
   | { type: "setBookingStatus"; id: string; status: Booking["status"] }
   | { type: "rescheduleBooking"; id: string; scheduledAt: string }
+  | { type: "reassignBooking"; id: string; physioId: string; actorId: string }
+  | { type: "updateUser"; userId: string; patch: Partial<Pick<User, "name" | "email" | "phone">> }
+  | { type: "setDoctorActive"; userId: string; active: boolean }
+  | {
+      type: "addPatient";
+      name: string;
+      email: string;
+      phone?: string;
+      passwordHash?: string;
+      condition?: Condition;
+      goal?: string;
+      dateOfBirth?: string;
+      address?: string;
+      assignedPhysioId?: string;
+      medicalHistory?: string;
+    }
   | { type: "addReview"; review: Omit<Review, "id" | "createdAt"> }
   | { type: "addPrescription"; prescription: Omit<Prescription, "id" | "createdAt"> }
   | { type: "upsertDailyLog"; log: Omit<DailyLog, "id" | "createdAt"> }
@@ -724,6 +740,120 @@ function reducer(state: AppState, action: Action): AppState {
         ],
       };
     }
+    case "reassignBooking": {
+      const booking = (state.bookings ?? []).find((b) => b.id === action.id);
+      const newDoctor = state.users.find((u) => u.id === action.physioId && u.role === "physio");
+      if (!booking || !newDoctor || booking.physioId === action.physioId) return state;
+      const clinicId = state.doctors.find((d) => d.userId === action.physioId)?.clinicId ?? action.physioId;
+      return {
+        ...state,
+        bookings: (state.bookings ?? []).map((b) =>
+          b.id === action.id ? { ...b, physioId: action.physioId } : b,
+        ),
+        consults: state.consults.map((c) =>
+          c.id === booking.consultId ? { ...c, physioId: action.physioId } : c,
+        ),
+        notifications: [
+          ...state.notifications,
+          {
+            id: uid("n"),
+            userId: action.physioId,
+            title: "Booking reassigned to you",
+            body: `${booking.patientName} · ${booking.reason} · ${clinicId}`,
+            type: "consult" as const,
+            read: false,
+            createdAt: new Date().toISOString(),
+            href: "/doctor/appointments",
+          },
+          {
+            id: uid("n"),
+            userId: booking.patientId,
+            title: "Your appointment was reassigned",
+            body: `You will now see ${newDoctor.name}.`,
+            type: "consult" as const,
+            read: false,
+            createdAt: new Date().toISOString(),
+            href: "/patient/appointments",
+          },
+        ],
+        audit: [
+          ...state.audit,
+          {
+            id: uid("audit"),
+            at: new Date().toISOString(),
+            actorId: action.actorId,
+            action: "reassign_booking",
+            detail: `Reassigned ${booking.patientName} to ${newDoctor.name}`,
+          },
+        ],
+      };
+    }
+    case "updateUser": {
+      const nextEmail = action.patch.email?.trim().toLowerCase();
+      if (nextEmail && state.users.some((u) => u.id !== action.userId && u.email.toLowerCase() === nextEmail)) {
+        return state;
+      }
+      return {
+        ...state,
+        users: state.users.map((u) =>
+          u.id === action.userId
+            ? {
+                ...u,
+                ...(action.patch.name !== undefined ? { name: action.patch.name.trim() } : {}),
+                ...(action.patch.phone !== undefined ? { phone: action.patch.phone } : {}),
+                ...(nextEmail ? { email: nextEmail } : {}),
+              }
+            : u,
+        ),
+      };
+    }
+    case "setDoctorActive":
+      return {
+        ...state,
+        doctors: state.doctors.map((d) =>
+          d.userId === action.userId ? { ...d, active: action.active } : d,
+        ),
+      };
+    case "addPatient": {
+      const email = action.email.trim().toLowerCase();
+      if (!email.includes("@") || state.users.some((u) => u.email.toLowerCase() === email)) {
+        return state;
+      }
+      const id = uid("patient");
+      return {
+        ...state,
+        users: [
+          ...state.users,
+          {
+            id,
+            name: action.name.trim(),
+            email,
+            password: "",
+            passwordHash: action.passwordHash,
+            role: "patient" as const,
+            phone: action.phone,
+            consentHipaa: true,
+            consentGdpr: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        profiles: [
+          ...state.profiles,
+          {
+            userId: id,
+            condition: action.condition ?? "back",
+            goal: action.goal ?? "Improve daily mobility",
+            diagnosis: action.medicalHistory || "Added by clinic staff",
+            painBaseline: 4,
+            dateOfBirth: action.dateOfBirth ?? "",
+            assignedPhysioId: action.assignedPhysioId ?? "",
+            phone: action.phone,
+            address: action.address,
+            medicalHistory: action.medicalHistory,
+          },
+        ],
+      };
+    }
     case "addReview": {
       if (state.reviews.some((r) => r.appointmentId === action.review.appointmentId)) return state;
       return {
@@ -920,6 +1050,20 @@ interface StoreValue {
   setConsultStatus: (id: string, status: Consult["status"]) => void;
   setBookingStatus: (id: string, status: Booking["status"]) => void;
   rescheduleBooking: (id: string, scheduledAt: string) => Promise<boolean>;
+  reassignBooking: (id: string, physioId: string, actorId: string) => void;
+  updateUser: (userId: string, patch: Partial<Pick<User, "name" | "email" | "phone">>) => void;
+  setDoctorActive: (userId: string, active: boolean) => void;
+  addPatient: (input: {
+    name: string;
+    email: string;
+    phone?: string;
+    condition?: Condition;
+    goal?: string;
+    dateOfBirth?: string;
+    address?: string;
+    assignedPhysioId?: string;
+    medicalHistory?: string;
+  }) => boolean;
   addReview: (review: Omit<Review, "id" | "createdAt">) => void;
   addPrescription: (prescription: Omit<Prescription, "id" | "createdAt">) => void;
   upsertDailyLog: (log: Omit<DailyLog, "id" | "createdAt">) => void;
@@ -948,6 +1092,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (cached?.currentUserId) {
       const user = cached.users.find((u) => u.id === cached.currentUserId);
       if (user) setAuthCookies(user.role, user.id);
+      // Initialize the Firebase Auth SDK here (a layout effect, which runs
+      // before child passive effects) so its persisted session is restored and
+      // Firestore has an auth token BEFORE ChatWindow / VideoRoom issue their
+      // first reads/writes on a direct navigation or reload. Without this,
+      // Firestore requests race auth init and are denied (chat "Saved offline",
+      // video never connects).
+      getFirebaseAuth();
     }
     setHydrated(true);
 
@@ -963,6 +1114,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Initialize the Firebase Auth SDK once a session is restored so its
+  // persisted login is rehydrated and Firestore requests (chat, video
+  // signaling) are authenticated on direct navigations and reloads — not only
+  // in the same tab immediately after an in-page login().
+  useEffect(() => {
+    if (!hydrated || !state.currentUserId) return;
+    getFirebaseAuth();
+  }, [hydrated, state.currentUserId]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1339,6 +1499,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (userId: string) => dispatch({ type: "deleteAccount", userId }),
     [],
   );
+  const reassignBooking = useCallback(
+    (id: string, physioId: string, actorId: string) =>
+      dispatch({ type: "reassignBooking", id, physioId, actorId }),
+    [],
+  );
+  const updateUser = useCallback(
+    (userId: string, patch: Partial<Pick<User, "name" | "email" | "phone">>) =>
+      dispatch({ type: "updateUser", userId, patch }),
+    [],
+  );
+  const setDoctorActive = useCallback(
+    (userId: string, active: boolean) => dispatch({ type: "setDoctorActive", userId, active }),
+    [],
+  );
+  const addPatient = useCallback(
+    (input: Parameters<StoreValue["addPatient"]>[0]) => {
+      const email = input.email.trim().toLowerCase();
+      if (!email.includes("@") || state.users.some((u) => u.email.toLowerCase() === email)) {
+        return false;
+      }
+      dispatch({ type: "addPatient", ...input });
+      return true;
+    },
+    [state.users],
+  );
   const resetDemo = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_KEY);
@@ -1363,6 +1548,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setConsultStatus,
       setBookingStatus,
       rescheduleBooking,
+      reassignBooking,
+      updateUser,
+      setDoctorActive,
+      addPatient,
       addReview,
       addPrescription,
       upsertDailyLog,
@@ -1397,6 +1586,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBookingStatus,
       setConsultStatus,
       rescheduleBooking,
+      reassignBooking,
+      updateUser,
+      setDoctorActive,
+      addPatient,
       addReview,
       addPrescription,
       upsertDailyLog,

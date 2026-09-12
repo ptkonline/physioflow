@@ -30,6 +30,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# firebase emulators
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
+storage-debug.log*
+firebase-export-*/
+
 # secrets — never commit real keys
 .env
 .env.*

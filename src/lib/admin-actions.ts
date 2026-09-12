@@ -53,3 +53,14 @@ export async function adminSetDoctorVerified(doctorId: string, isVerified: boole
   }
   return { ok: true as const, doctorId: id, isVerified: Boolean(isVerified) };
 }
+
+/**
+ * Re-checks the admin session on the server before a store mutation runs.
+ * Admin pages are already gated by assertAdmin() in the layout; this adds a
+ * per-action check for defense-in-depth and returns the acting admin.
+ */
+export async function adminAuthorize() {
+  const session = await adminActor();
+  if (!session) return { ok: false as const };
+  return { ok: true as const, userId: session.userId, email: session.email };
+}

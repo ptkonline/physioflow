@@ -1,4 +1,5 @@
 import {
+  connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
   sendEmailVerification,
@@ -8,14 +9,25 @@ import {
   type Auth,
   type User,
 } from "firebase/auth";
-import { isFirebaseConfigured } from "./firebase-config";
+import { isFirebaseConfigured, emulatorEnabled } from "./firebase-config";
 import { getFirebase } from "./firebase";
 
 let auth: Auth | undefined;
 
 export function getFirebaseAuth() {
   if (!isFirebaseConfigured()) return null;
-  if (!auth) auth = getAuth(getFirebase().app);
+  if (!auth) {
+    auth = getAuth(getFirebase().app);
+    if (emulatorEnabled()) {
+      const host = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST?.trim() || "127.0.0.1";
+      const port = Number.parseInt(process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT ?? "", 10) || 9099;
+      try {
+        connectAuthEmulator(auth, `http://${host}:${port}`, { disableWarnings: true });
+      } catch {
+        /* already connected (HMR) */
+      }
+    }
+  }
   return auth;
 }
 
@@ -44,6 +56,22 @@ export async function syncFirebaseAuth(
     } catch {
       return null;
     }
+  }
+}
+
+/**
+ * Resolve once the Firebase Auth SDK has finished restoring any persisted
+ * session. Firestore reads/writes issued before this can be sent without an
+ * auth token and rejected by security rules, so chat/video write paths await
+ * this before their first operation (e.g. on a direct navigation or reload).
+ */
+export async function ensureAuthReady() {
+  const instance = getFirebaseAuth();
+  if (!instance) return;
+  try {
+    await instance.authStateReady();
+  } catch {
+    /* older SDKs / unsupported — best effort */
   }
 }
 
