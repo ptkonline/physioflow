@@ -62,7 +62,14 @@ export function BookingList({
                   {formatSlot(b.scheduledAt)} · {b.durationMin} min
                   {b.mode ? ` · ${b.mode === "offline" ? "Clinic visit" : "Online"}` : ""}
                 </p>
-                <p className="text-xl font-semibold">{isDoctor ? b.patientName : doctor?.name}</p>
+                <p className="text-xl font-semibold">
+                  <Link
+                    href={isDoctor ? `/doctor/appointments/${b.id}` : `/patient/appointments/${b.id}`}
+                    className="no-underline"
+                  >
+                    {isDoctor ? b.patientName : doctor?.name}
+                  </Link>
+                </p>
                 <p className="text-muted">{b.reason}</p>
                 <p className="text-sm text-muted">
                   {b.patientPhone} · {b.patientEmail}
@@ -84,6 +91,12 @@ export function BookingList({
               <div className="flex flex-wrap gap-2">
                 <Link href={`${chatBase}/${b.id}`} className="btn btn-primary">
                   Open chat
+                </Link>
+                <Link
+                  href={isDoctor ? `/doctor/appointments/${b.id}` : `/patient/appointments/${b.id}`}
+                  className="btn btn-ghost"
+                >
+                  Details
                 </Link>
                 {b.mode !== "offline" && (
                   <Link href={b.meetingLink || `/consult/${b.consultId}`} className="btn btn-ghost">

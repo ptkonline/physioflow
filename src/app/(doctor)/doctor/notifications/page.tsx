@@ -24,7 +24,11 @@ export default function PhysioNotifications() {
           <li key={n.id} className="card p-5">
             <p className="font-semibold">{n.title}</p>
             <p className="text-muted">{n.body}</p>
-            {n.href && <Link href={n.href}>Open</Link>}
+            {n.href && (
+              <Link href={n.href} className="btn btn-primary mt-3 inline-flex">
+                {n.type === "missed_call" ? "Open visit" : "Open"}
+              </Link>
+            )}
           </li>
         ))}
       </ul>

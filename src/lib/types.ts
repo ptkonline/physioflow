@@ -175,10 +175,11 @@ export interface AppNotification {
   userId: string;
   title: string;
   body: string;
-  type: "exercise" | "consult" | "feedback" | "system" | "missed_call";
+  type: "exercise" | "consult" | "feedback" | "system" | "missed_call" | "call";
   read: boolean;
   createdAt: string;
   href?: string;
+  bookingId?: string;
 }
 
 export interface AuditEvent {

@@ -38,11 +38,15 @@ export default function NotificationsPage() {
             <p className="text-sm text-muted">{n.type}</p>
             <p className="font-semibold">{n.title}</p>
             <p className="text-muted">{n.body}</p>
-            {n.href && (
+            {n.href && (n.type === "call" || n.type === "consult" || n.type === "missed_call") ? (
+              <Link href={n.href} className="btn btn-primary mt-3 inline-flex">
+                Join Call
+              </Link>
+            ) : n.href ? (
               <Link href={n.href} className="mt-2 inline-block">
                 Open
               </Link>
-            )}
+            ) : null}
           </li>
         ))}
       </ul>

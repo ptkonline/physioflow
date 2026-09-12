@@ -30,10 +30,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const admin = await import("firebase-admin");
+    const href = body.href ? String(body.href) : "";
     await admin.messaging().send({
       token,
       notification: { title, body: text },
-      data: body.href ? { href: String(body.href) } : undefined,
+      data: href ? { href, click_action: href } : undefined,
+      webpush: href
+        ? {
+            fcmOptions: { link: href },
+            notification: { title, body: text },
+          }
+        : undefined,
     });
     return Response.json({ sent: true });
   } catch (err) {

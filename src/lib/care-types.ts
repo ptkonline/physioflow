@@ -1,4 +1,4 @@
-export type MessageType = "text" | "image" | "prescription" | "video";
+export type MessageType = "text" | "image" | "prescription" | "video" | "call";
 
 export interface ChatMessage {
   id: string;
@@ -9,6 +9,7 @@ export interface ChatMessage {
   videoId?: string;
   videoUrl?: string;
   videoTitle?: string;
+  href?: string;
   type: MessageType;
   createdAt: string;
 }

@@ -253,3 +253,42 @@ export function subscribeCallSignals(
     if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
   };
 }
+
+export function subscribeCallMeta(
+  roomId: string,
+  onMeta: (meta: { status?: CallStatus; appointmentId?: string }) => void,
+): () => void {
+  const readLocal = () => {
+    try {
+      const raw = localStorage.getItem(`physioflow.call.meta.${roomId}`);
+      if (raw) onMeta(JSON.parse(raw) as { status?: CallStatus; appointmentId?: string });
+    } catch {
+      /* ignore */
+    }
+  };
+  readLocal();
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === `physioflow.call.meta.${roomId}`) readLocal();
+  };
+  if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
+
+  if (!isFirebaseConfigured()) {
+    return () => {
+      if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+    };
+  }
+
+  const { db } = getFirebase();
+  const unsub = onSnapshot(doc(db, "calls", roomId), (snap) => {
+    const data = snap.data();
+    if (!data) return;
+    onMeta({
+      status: data.status as CallStatus | undefined,
+      appointmentId: data.appointmentId as string | undefined,
+    });
+  });
+  return () => {
+    unsub();
+    if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+  };
+}

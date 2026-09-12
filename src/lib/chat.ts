@@ -126,6 +126,7 @@ export function subscribeMessages(
             videoId: data.videoId as string | undefined,
             videoUrl: data.videoUrl as string | undefined,
             videoTitle: data.videoTitle as string | undefined,
+            href: data.href as string | undefined,
             type: (data.type as MessageType) ?? "text",
             createdAt: typeof created === "string" ? created : created?.toDate().toISOString() ?? new Date().toISOString(),
           } satisfies ChatMessage;
@@ -156,6 +157,7 @@ export async function sendChatMessage(input: {
   videoId?: string;
   videoUrl?: string;
   videoTitle?: string;
+  href?: string;
 }) {
   const id = chatIdFor(input.appointmentId);
   let type: MessageType = input.type ?? "text";
@@ -179,6 +181,7 @@ export async function sendChatMessage(input: {
     videoId: input.videoId,
     videoUrl: input.videoUrl,
     videoTitle: input.videoTitle,
+    href: input.href,
     type,
     createdAt: new Date().toISOString(),
   };
@@ -202,6 +205,7 @@ export async function sendChatMessage(input: {
     videoId: message.videoId ?? null,
     videoUrl: message.videoUrl ?? null,
     videoTitle: message.videoTitle ?? null,
+    href: message.href ?? null,
     type,
     createdAt: serverTimestamp(),
   });

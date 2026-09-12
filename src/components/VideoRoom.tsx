@@ -8,6 +8,7 @@ import {
   type CallRoomMeta,
   type CallSignal,
 } from "@/lib/webrtc-signaling";
+import { MISSED_CALL_MS } from "@/lib/call-window";
 import { isFirebaseConfigured } from "@/lib/firebase-config";
 import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -68,7 +69,15 @@ export function VideoRoom({
   const [audioOnly, setAudioOnly] = useState(false);
   const audioOnlyRef = useRef(false);
   const remoteLiveRef = useRef(false);
+  const missedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [turnReady, setTurnReady] = useState<boolean | null>(null);
+
+  const clearMissedTimer = useCallback(() => {
+    if (missedTimerRef.current) {
+      clearTimeout(missedTimerRef.current);
+      missedTimerRef.current = null;
+    }
+  }, []);
 
   const attachRemote = useCallback((stream: MediaStream) => {
     const node = remoteRef.current;
@@ -77,7 +86,8 @@ export function VideoRoom({
     void node.play().catch(() => undefined);
     setRemoteLive(true);
     remoteLiveRef.current = true;
-  }, []);
+    clearMissedTimer();
+  }, [clearMissedTimer]);
 
   const flushIce = useCallback(async (pc: RTCPeerConnection) => {
     if (!pc.remoteDescription) return;
@@ -140,12 +150,13 @@ export function VideoRoom({
 
   useEffect(() => {
     return () => {
+      clearMissedTimer();
       unsubRef.current();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       pcRef.current?.close();
       pcRef.current = null;
     };
-  }, []);
+  }, [clearMissedTimer]);
 
   async function join(voiceOnly = false) {
     setError(null);
@@ -218,12 +229,28 @@ export function VideoRoom({
 
       setLive(true);
       onJoin?.();
+      if (isCaller) {
+        clearMissedTimer();
+        missedTimerRef.current = setTimeout(() => {
+          if (remoteLiveRef.current) return;
+          void (async () => {
+            try {
+              await sendCallSignal(room.roomId, localUserId, "missed");
+            } catch {
+              /* optional */
+            }
+            setStatus("Patient did not join — marked missed");
+            onMissed?.();
+          })();
+        }, MISSED_CALL_MS);
+      }
     } catch (err) {
       setError(mediaErrorMessage(err));
     }
   }
 
   async function leave() {
+    clearMissedTimer();
     const missed = isCaller && !remoteLiveRef.current && live;
     try {
       await sendCallSignal(room.roomId, localUserId, missed ? "missed" : "hangup");

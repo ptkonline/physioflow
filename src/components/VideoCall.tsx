@@ -2,6 +2,7 @@
 
 import { VideoRoom } from "@/components/VideoRoom";
 import { formatDateTime } from "@/lib/format";
+import { notifyFcm } from "@/lib/notifications";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
 
@@ -47,13 +48,30 @@ export function VideoCall({ consultId }: { consultId: string }) {
         isCaller={isCaller}
         onJoin={() => setConsultStatus(consult.id, "live")}
         onMissed={() => {
-          const otherId = user.id === consult.patientId ? consult.physioId : consult.patientId;
+          if (user.role === "physio") {
+            addNotification({
+              userId: user.id,
+              title: "Missed call",
+              body: `${patient.name} did not join the video visit.`,
+              type: "missed_call",
+              href: `/consult/${consult.id}`,
+              bookingId: booking?.id,
+            });
+            void notifyFcm({
+              userId: user.id,
+              title: "Missed call",
+              body: `${patient.name} did not join. Booking ${booking?.id ?? consult.id}.`,
+              href: `/doctor/appointments/${booking?.id ?? ""}`,
+            });
+            return;
+          }
           addNotification({
-            userId: otherId,
+            userId: consult.physioId,
             title: "Missed call",
             body: `${user.name} tried to reach you for ${consult.topic}.`,
             type: "missed_call",
             href: `/consult/${consult.id}`,
+            bookingId: booking?.id,
           });
         }}
         onLeave={() => {

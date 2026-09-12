@@ -5,7 +5,8 @@ import { ensureChatRoom, sendChatMessage, subscribeMessages } from "@/lib/chat";
 import type { ChatMessage, LibraryVideo } from "@/lib/care-types";
 import { subscribeDoctorVideos } from "@/lib/video-library";
 import { enqueueOffline } from "@/lib/offline-idb";
-import { ImagePlus, Library, Send } from "lucide-react";
+import { ImagePlus, Library, Send, Video } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 export function ChatWindow({
@@ -155,6 +156,16 @@ export function ChatWindow({
                   </div>
                 )}
                 {m.text && <p>{m.text}</p>}
+                {(m.type === "call" || m.href) && m.href && (
+                  <Link
+                    href={m.href}
+                    className={`mt-2 inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-sm font-semibold no-underline ${
+                      patientSide ? "bg-white text-teal" : "bg-teal text-white"
+                    }`}
+                  >
+                    <Video size={14} /> Join Call
+                  </Link>
+                )}
                 <p className={`mt-1 text-xs ${patientSide ? "text-white/80" : "text-muted"}`}>
                   {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </p>
