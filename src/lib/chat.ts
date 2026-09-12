@@ -15,6 +15,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import type { ChatMessage, ChatRoom, MessageType } from "./care-types";
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
+import { ensureAuthReady } from "./firebase-auth-session";
 import { compressImage, fileToDataUrl } from "./image";
 
 const LOCAL_CHATS = "physioflow.chats";
@@ -65,9 +66,9 @@ export async function ensureChatRoom(input: {
     }
     return all[id].room;
   }
+  await ensureAuthReady();
   const { db } = getFirebase();
   const refDoc = doc(db, "chats", id);
-  const existing = await getDoc(refDoc);
   const payload = {
     appointmentId: input.appointmentId,
     patientId: input.patientId,
@@ -76,6 +77,7 @@ export async function ensureChatRoom(input: {
     doctorEmail: (input.doctorEmail ?? "").trim().toLowerCase(),
     updatedAt: serverTimestamp(),
   };
+  const existing = await getDoc(refDoc);
   if (!existing.exists()) {
     await setDoc(refDoc, { ...payload, createdAt: serverTimestamp() });
   } else {
@@ -160,6 +162,7 @@ export async function sendChatMessage(input: {
   href?: string;
 }) {
   const id = chatIdFor(input.appointmentId);
+  if (isFirebaseConfigured()) await ensureAuthReady();
   let type: MessageType = input.type ?? "text";
   let imageUrl: string | undefined;
   let fileUrl: string | undefined;

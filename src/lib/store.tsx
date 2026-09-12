@@ -30,7 +30,7 @@ import type {
 } from "./types";
 import { DEFAULT_HOURS } from "./types";
 import type { DailyLog, Prescription, Review } from "./care-types";
-import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
+import { clearFirebaseAuth, getFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
 import { comparePassword, hashPassword, hasLocalCredential, isPasswordHashed, needsBcryptUpgrade, stripUserSecrets } from "./password";
 import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
 import { revokeAdminSession } from "./admin-actions";
@@ -948,6 +948,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (cached?.currentUserId) {
       const user = cached.users.find((u) => u.id === cached.currentUserId);
       if (user) setAuthCookies(user.role, user.id);
+      // Initialize the Firebase Auth SDK here (a layout effect, which runs
+      // before child passive effects) so its persisted session is restored and
+      // Firestore has an auth token BEFORE ChatWindow / VideoRoom issue their
+      // first reads/writes on a direct navigation or reload. Without this,
+      // Firestore requests race auth init and are denied (chat "Saved offline",
+      // video never connects).
+      getFirebaseAuth();
     }
     setHydrated(true);
 
@@ -963,6 +970,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Initialize the Firebase Auth SDK once a session is restored so its
+  // persisted login is rehydrated and Firestore requests (chat, video
+  // signaling) are authenticated on direct navigations and reloads — not only
+  // in the same tab immediately after an in-page login().
+  useEffect(() => {
+    if (!hydrated || !state.currentUserId) return;
+    getFirebaseAuth();
+  }, [hydrated, state.currentUserId]);
 
   useEffect(() => {
     if (!hydrated) return;

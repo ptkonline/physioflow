@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
+import { ensureAuthReady } from "./firebase-auth-session";
 
 export type SignalKind = "offer" | "answer" | "ice" | "hangup" | "missed";
 
@@ -84,6 +85,7 @@ function publishLocalSignal(roomId: string, body: CallSignal) {
 
 export async function ensureCallRoom(meta: CallRoomMeta) {
   if (!isFirebaseConfigured()) return;
+  await ensureAuthReady();
   const { db } = getFirebase();
   await setDoc(
     doc(db, "calls", meta.roomId),
@@ -121,6 +123,7 @@ export async function markCallStatus(
     }
   }
   if (!isFirebaseConfigured()) return;
+  await ensureAuthReady();
   const { db } = getFirebase();
   await setDoc(doc(db, "calls", roomId), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
   await setDoc(doc(db, "calls", roomId, "metadata", "current"), { ...meta, updatedAt: serverTimestamp() }, { merge: true });
@@ -165,6 +168,7 @@ export async function sendCallSignal(
     await markCallStatus(roomId, kind === "answer" ? "live" : "ringing", from);
   }
   if (!isFirebaseConfigured()) return;
+  await ensureAuthReady();
   const { db } = getFirebase();
   await addDoc(collection(db, "calls", roomId, "signals"), {
     kind,
