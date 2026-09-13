@@ -5,6 +5,8 @@ import { ensureChatRoom, sendChatMessage, subscribeMessages } from "@/lib/chat";
 import type { ChatMessage, LibraryVideo } from "@/lib/care-types";
 import { subscribeDoctorVideos } from "@/lib/video-library";
 import { enqueueOffline } from "@/lib/offline-idb";
+import { pushLsQueue } from "@/lib/offline-ls";
+import { NetworkStatus } from "@/components/NetworkStatus";
 import { ImagePlus, Library, Send, Video } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -78,9 +80,9 @@ export function ChatWindow({
     const payloadText = video ? text || `Exercise: ${video.title}` : text;
     try {
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        await enqueueOffline({
+        const queued = {
           id: crypto.randomUUID(),
-          kind: "chat",
+          kind: "chat" as const,
           createdAt: new Date().toISOString(),
           payload: {
             appointmentId,
@@ -91,7 +93,9 @@ export function ChatWindow({
             patientEmail,
             doctorEmail,
           },
-        });
+        };
+        await enqueueOffline(queued);
+        pushLsQueue(queued);
         setText("");
         setPicker(false);
         setError("You're offline. The message is queued and will send when you reconnect.");
@@ -110,9 +114,9 @@ export function ChatWindow({
       setPicker(false);
       setError("");
     } catch (err) {
-      await enqueueOffline({
+      const queued = {
         id: crypto.randomUUID(),
-        kind: "chat",
+        kind: "chat" as const,
         createdAt: new Date().toISOString(),
         payload: {
           appointmentId,
@@ -123,7 +127,9 @@ export function ChatWindow({
           patientEmail,
           doctorEmail,
         },
-      });
+      };
+      await enqueueOffline(queued);
+      pushLsQueue(queued);
       setText("");
       setError(err instanceof Error ? err.message : "Could not send. Saved to retry shortly.");
     } finally {
@@ -138,6 +144,10 @@ export function ChatWindow({
 
   return (
     <div className="card flex h-[min(70vh,640px)] flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-line px-4 py-2">
+        <p className="text-sm font-medium">Visit chat</p>
+        <NetworkStatus />
+      </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {error && <p className="text-rose">{error}</p>}
         {messages.length === 0 && !error && <p className="text-muted">No messages yet. Say hello to start the visit thread.</p>}

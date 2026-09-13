@@ -17,6 +17,11 @@ export default function PatientRecord() {
   const feedback = state.completions.filter((c) => c.patientId === params.id).slice(-8).reverse();
   const [name, setName] = useState("Updated home program");
   const [selected, setSelected] = useState<string[]>([]);
+  const [sets, setSets] = useState(3);
+  const [reps, setReps] = useState(8);
+  const [freq, setFreq] = useState(5);
+  const [startDate, setStartDate] = useState("");
+  const [saved, setSaved] = useState(false);
   const [topic, setTopic] = useState("Follow-up visit");
   const [when, setWhen] = useState("");
 
@@ -42,13 +47,14 @@ export default function PatientRecord() {
     e.preventDefault();
     const items: ProgramItem[] = selected.map((exerciseId) => ({
       exerciseId,
-      sets: 3,
-      reps: 8,
-      frequencyPerWeek: 5,
-      notes: "Progress if pain stays at or below 3/10.",
+      sets,
+      reps,
+      frequencyPerWeek: freq,
+      notes: startDate ? `Start ${startDate}` : "Progress if pain stays at or below 3/10.",
     }));
     if (items.length === 0) return;
     assignProgram({ name, patientId, physioId, items });
+    setSaved(true);
   }
 
   function onConsult(e: FormEvent) {
@@ -103,9 +109,28 @@ export default function PatientRecord() {
               </label>
             ))}
         </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <label className="block space-y-1">
+            <span>Sets</span>
+            <input className="field" type="number" min={1} max={10} value={sets} onChange={(e) => setSets(Number(e.target.value))} />
+          </label>
+          <label className="block space-y-1">
+            <span>Reps</span>
+            <input className="field" type="number" min={1} max={40} value={reps} onChange={(e) => setReps(Number(e.target.value))} />
+          </label>
+          <label className="block space-y-1">
+            <span>Days / week</span>
+            <input className="field" type="number" min={1} max={7} value={freq} onChange={(e) => setFreq(Number(e.target.value))} />
+          </label>
+          <label className="block space-y-1">
+            <span>Start date</span>
+            <input className="field" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+        </div>
         <button className="btn btn-primary" type="submit">
           Assign program
         </button>
+        {saved && <p className="text-sm text-teal-dark">Program assigned. The patient is notified.</p>}
       </form>
       <form onSubmit={onConsult} className="card space-y-3 p-5">
         <h2 className="text-xl font-semibold">Book a video visit</h2>

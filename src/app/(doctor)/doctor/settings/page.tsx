@@ -1,5 +1,6 @@
 "use client";
 
+import { ClientDate } from "@/components/ClientDate";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { SlotCalendar } from "@/components/SlotCalendar";
 import { DEFAULT_HOURS, type WeekHours } from "@/lib/types";
@@ -144,7 +145,7 @@ export default function PhysioSettings() {
         <ul className="mt-3 space-y-2">
           {events.map((e) => (
             <li key={e.id} className="text-muted">
-              {new Date(e.at).toLocaleString()} — {e.action}: {e.detail}
+              <ClientDate iso={e.at} /> — {e.action}: {e.detail}
             </li>
           ))}
         </ul>

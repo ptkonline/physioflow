@@ -11,6 +11,8 @@
  * doctors_public/{doctorId}
  *   clinicLocation { latitude, longitude, address }
  *   pricing { onlineFee, offlineFee, currency }
+ * booking_slots/{physioId}_{slotMs} — unique lock for (doctor, scheduledAt)
+ * programs/{id} + patient_programs/{patientId}_{programId}
  * bookings/{id}
  *   mode: online | offline, finalPrice, clinicAddress, meetingLink
  *

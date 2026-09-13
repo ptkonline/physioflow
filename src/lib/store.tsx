@@ -33,6 +33,8 @@ import type { DailyLog, Prescription, Review } from "./care-types";
 import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
 import { comparePassword, hashPassword, hasLocalCredential, isPasswordHashed, needsBcryptUpgrade, stripUserSecrets } from "./password";
 import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
+import { persistProgram } from "./persist-program";
+import { notifyFcm } from "./notifications";
 import { revokeAdminSession } from "./admin-actions";
 import { clearAuthCookies, setAuthCookies } from "./auth-session";
 
@@ -1119,16 +1121,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   );
   const assignProgram = useCallback(
-    (input: { name: string; patientId: string; physioId: string; items: ProgramItem[] }) =>
-      dispatch({
-        type: "assignProgram",
-        program: {
-          ...input,
-          id: uid("prog"),
-          startDate: new Date().toISOString(),
-          status: "active",
-        },
-      }),
+    (input: { name: string; patientId: string; physioId: string; items: ProgramItem[] }) => {
+      const program = {
+        ...input,
+        id: uid("prog"),
+        startDate: new Date().toISOString(),
+        status: "active" as const,
+      };
+      dispatch({ type: "assignProgram", program });
+      void persistProgram(program);
+      void notifyFcm({
+        userId: input.patientId,
+        title: "New exercise program",
+        body: `${input.name} is ready in Today’s program.`,
+        href: "/patient/exercise",
+      });
+    },
     [],
   );
   const completeExercise = useCallback(

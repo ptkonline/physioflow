@@ -1,4 +1,6 @@
 "use client";
 
-/** Thin alias for the patient dashboard page (navigation targets). */
+"use client";
+
+/** Patient dashboard — Start exercises → /patient/exercise, Open inbox → /patient/notifications. */
 export { default } from "@/app/(patient)/patient/dashboard/page";

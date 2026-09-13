@@ -91,11 +91,11 @@ function LoginForm() {
           <p className="text-muted">{t("subtitle")}</p>
           <label className="block space-y-1">
             <span>{t("email")}</span>
-            <input className="field" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input className="field" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required suppressHydrationWarning />
           </label>
           <label className="block space-y-1">
             <span>{t("password")}</span>
-            <input className="field" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input className="field" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required suppressHydrationWarning />
           </label>
           {error && <p className="text-rose">{error}</p>}
           <button className="btn btn-primary w-full" type="submit">

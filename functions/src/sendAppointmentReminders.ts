@@ -2,7 +2,7 @@
  * Firebase Cloud Function — appointment reminders (24h, 1h, and 30m).
  *
  * Deploy: cd functions && npm i && firebase deploy --only functions
- * Schedule: every 15 minutes via Cloud Scheduler (pubsub).
+ * Schedule: every 5 minutes via Cloud Scheduler (pubsub).
  *
  * Requires:
  *   - Firestore `bookings` with scheduledAt, status, patientId, physioId, patientPhone, reminded*
@@ -19,7 +19,7 @@ initializeApp();
 const HOUR_MS = 60 * 60 * 1000;
 const HALF_HOUR_MS = 30 * 60 * 1000;
 
-export const sendAppointmentReminders = onSchedule("every 15 minutes", async () => {
+export const sendAppointmentReminders = onSchedule("every 5 minutes", async () => {
   const db = getFirestore();
   const now = Date.now();
   const snap = await db.collection("bookings").where("status", "==", "upcoming").get();

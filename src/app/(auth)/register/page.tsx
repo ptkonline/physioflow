@@ -130,7 +130,7 @@ export default function RegisterPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block space-y-1">
                 <span>Email</span>
-                <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <input className="field" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required suppressHydrationWarning />
               </label>
               <label className="block space-y-1">
                 <span>Phone</span>
@@ -142,10 +142,12 @@ export default function RegisterPage() {
               <input
                 className="field"
                 type="password"
+                autoComplete="new-password"
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                suppressHydrationWarning
               />
             </label>
             <label className="block space-y-1">

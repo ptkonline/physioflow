@@ -16,7 +16,7 @@ export async function notifyFcm(input: {
 }) {
   if (!isFirebaseConfigured() && !input.token) return { sent: false as const };
   try {
-    const res = await fetch("/api/notify-fcm", {
+    const res = await fetch("/api/_internal/notify-fcm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),

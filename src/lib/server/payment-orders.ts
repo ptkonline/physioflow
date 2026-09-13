@@ -24,14 +24,13 @@ export async function savePaymentOrder(record: PaymentOrderRecord) {
   const db = await getAdminDb();
   if (db) {
     try {
-      await db.collection("payment_orders").doc(record.orderId).set(
-        {
-          ...record,
-          updatedAt: new Date().toISOString(),
-          serverUpdatedAt: new Date().toISOString(),
-        },
-        { merge: true },
-      );
+      const payload = {
+        ...record,
+        updatedAt: new Date().toISOString(),
+        serverUpdatedAt: new Date().toISOString(),
+      };
+      await db.collection("payment_orders").doc(record.orderId).set(payload, { merge: true });
+      await db.collection("paymentOrders").doc(record.orderId).set(payload, { merge: true });
     } catch (err) {
       console.warn("[payment-orders]", err instanceof Error ? err.message : err);
     }
@@ -42,9 +41,10 @@ export async function savePaymentOrder(record: PaymentOrderRecord) {
 export async function getPaymentOrder(orderId: string, token?: string) {
   const db = await getAdminDb();
   if (db) {
-    const snap = await db.collection("payment_orders").doc(orderId).get();
-    if (snap.exists) {
-      const record = snap.data() as unknown as PaymentOrderRecord;
+    const first = await db.collection("payment_orders").doc(orderId).get();
+    const second = first.exists ? first : await db.collection("paymentOrders").doc(orderId).get();
+    if (second.exists) {
+      const record = second.data() as unknown as PaymentOrderRecord;
       cache().set(orderId, record);
       return record;
     }

@@ -76,7 +76,7 @@ export interface DoctorProfile {
 
 export type PaymentStatus = "pending" | "success" | "failed" | "refunded";
 
-export type CallStatus = "ringing" | "live" | "ended" | "missed";
+export type CallStatus = "incoming" | "ringing" | "missed" | "connected" | "ended" | "live";
 
 export interface Booking {
   id: string;

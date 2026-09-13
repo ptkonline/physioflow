@@ -1,13 +1,8 @@
+import { formatDateTime } from "./format";
 import { DEFAULT_HOURS, type AppState, type WeekHours } from "./types";
 
 export function formatSlot(iso: string) {
-  return new Date(iso).toLocaleString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatDateTime(iso);
 }
 
 export function openSlots(physioId: string, state: AppState, daysAhead = 10) {

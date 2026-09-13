@@ -1,11 +1,11 @@
 "use client";
 
 import { Logo } from "@/components/Logo";
+import { NotificationBell } from "@/components/NotificationBell";
 import { homePath } from "@/lib/paths";
 import { useCurrentUser, useStore } from "@/lib/store";
 import type { Role } from "@/lib/types";
 import {
-  Bell,
   BookOpen,
   Calendar,
   Home,
@@ -40,13 +40,11 @@ function navFor(role: Role) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useCurrentUser();
-  const { state, logout } = useStore();
+  const { logout } = useStore();
   const pathname = usePathname();
   if (!user) return null;
 
   const nav = navFor(user.role);
-  const unread = state.notifications.filter((n) => n.userId === user.id && !n.read).length;
-  const notifyHref = user.role === "physio" ? "/doctor/notifications" : "/patient/notifications";
   const settingsHref = user.role === "physio" ? "/doctor/settings" : "/patient/settings";
 
   return (
@@ -79,16 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="flex items-center gap-2">
-            <Link
-              href={notifyHref}
-              className="relative grid h-11 w-11 place-items-center rounded-xl border border-line bg-white no-underline"
-              aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
-            >
-              <Bell size={18} />
-              {unread > 0 && (
-                <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose" />
-              )}
-            </Link>
+            <NotificationBell />
             <Link href={settingsHref} className="hidden rounded-xl px-3 py-2 text-sm no-underline md:block">
               {user.name}
             </Link>

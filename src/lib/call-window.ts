@@ -3,7 +3,7 @@ import type { Booking } from "./types";
 /** Minutes before start and after end when the visit can be started/joined. */
 export const CALL_WINDOW_BEFORE_MIN = 15;
 export const CALL_WINDOW_AFTER_MIN = 15;
-export const MISSED_CALL_MS = 3 * 60 * 1000;
+export const MISSED_CALL_MS = 30 * 1000;
 
 export function bookingCallBounds(booking: Pick<Booking, "scheduledAt" | "durationMin">) {
   const start = Date.parse(booking.scheduledAt);

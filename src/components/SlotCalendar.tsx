@@ -1,5 +1,6 @@
 "use client";
 
+import { ClientDate } from "@/components/ClientDate";
 import { formatSlot, openSlots } from "@/lib/availability";
 import type { AppState } from "@/lib/types";
 import { useMemo } from "react";
@@ -7,10 +8,6 @@ import { useMemo } from "react";
 function dayKey(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
-
-function dayLabel(iso: string) {
-  return new Date(iso).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
 }
 
 export function SlotCalendar({
@@ -48,7 +45,9 @@ export function SlotCalendar({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map(([key, hours]) => (
           <article key={key} className="rounded-2xl bg-white p-3 ring-1 ring-line">
-            <p className="text-sm font-semibold">{dayLabel(hours[0])}</p>
+            <p className="text-sm font-semibold">
+              <ClientDate iso={hours[0]} kind="date" />
+            </p>
             <div className="mt-2 grid grid-cols-2 gap-1">
               {hours.map((iso) => (
                 <button
@@ -57,7 +56,7 @@ export function SlotCalendar({
                   className={`rounded-xl px-2 py-1 text-xs ${value === iso ? "bg-teal text-white" : "bg-cream text-ink"}`}
                   onClick={() => onChange(iso)}
                 >
-                  {new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  <ClientDate iso={iso} kind="time" />
                 </button>
               ))}
             </div>

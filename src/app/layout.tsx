@@ -29,8 +29,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const locale = await getLocale();
   const messages = await getMessages();
   return (
-    <html lang={locale} className={`${plusJakarta.variable} ${notoDevanagari.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">
+    <html
+      lang={locale}
+      className={`${plusJakarta.variable} ${notoDevanagari.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-full font-sans" suppressHydrationWarning>
         <NextIntlClientProvider messages={messages}>
           <Providers>{children}</Providers>
         </NextIntlClientProvider>

@@ -1,9 +1,8 @@
 import type { LibraryVideo } from "./care-types";
-import { hashPasswordSync } from "./password";
 import type { AppState, Exercise } from "./types";
 
-/** Shared demo credential hash — plaintext never stored in seed data. */
-const DEMO_PASSWORD_HASH = hashPasswordSync("demo123");
+/** bcrypt of "demo123" — fixed so server and client seed modules match. */
+const DEMO_PASSWORD_HASH = "$2b$10$mrs.6rG53KyIlMGeRgQwye7gkweKop145FuWJQmFVCIPlDKMnmOXm";
 
 export const CONDITIONS = [
   { id: "knee", label: "Knee injury" },

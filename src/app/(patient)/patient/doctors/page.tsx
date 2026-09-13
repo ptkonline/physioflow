@@ -1,9 +1,10 @@
 "use client";
 
+import { ClientDate } from "@/components/ClientDate";
 import { ClinicMapThumb } from "@/components/maps/ClinicMapThumb";
 import { DoctorAvatar } from "@/components/shared/DoctorAvatar";
 import { VerifiedBadge } from "@/components/shared/VerifiedBadge";
-import { formatSlot, openSlots } from "@/lib/availability";
+import { openSlots } from "@/lib/availability";
 import { calculateDistance, clinicPoint, formatDistanceKm, readPatientCoords, savePatientCoords } from "@/lib/geo";
 import { doctorPricing, formatInr } from "@/lib/pricing";
 import { averageRating } from "@/lib/reviews";
@@ -103,7 +104,9 @@ export default function PatientDoctors() {
               ) : (
                 <ul className="mt-1 space-y-1 text-muted">
                   {next.map((iso) => (
-                    <li key={iso}>{formatSlot(iso)}</li>
+                    <li key={iso}>
+                      <ClientDate iso={iso} />
+                    </li>
                   ))}
                 </ul>
               )}

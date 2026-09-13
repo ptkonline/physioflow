@@ -1,13 +1,22 @@
+const DISPLAY_LOCALE = "en-IN";
+
 export function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
 }
 
+export function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString(DISPLAY_LOCALE, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString(DISPLAY_LOCALE, {
     weekday: "short",
     month: "short",
     day: "numeric",

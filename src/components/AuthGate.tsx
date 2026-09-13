@@ -32,7 +32,11 @@ export function AuthGate({
     }
   }, [hydrated, user, role, router, pathname]);
 
-  if (!hydrated || !user) return null;
-  if (role && user.role !== role) return null;
+  if (!hydrated || !user) {
+    return <div className="min-h-screen bg-bg" aria-busy="true" />;
+  }
+  if (role && user.role !== role) {
+    return <div className="min-h-screen bg-bg" aria-busy="true" />;
+  }
   return <>{children}</>;
 }

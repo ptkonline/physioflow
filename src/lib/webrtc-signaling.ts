@@ -13,7 +13,7 @@ import { ensureFirebaseSession } from "./firebase-auth-session";
 
 export type SignalKind = "offer" | "answer" | "ice" | "hangup" | "missed";
 
-export type CallStatus = "ringing" | "live" | "ended" | "missed";
+export type CallStatus = "incoming" | "ringing" | "missed" | "connected" | "ended" | "live";
 
 export type CallSignal =
   | {

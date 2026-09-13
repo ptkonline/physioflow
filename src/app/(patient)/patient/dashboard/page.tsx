@@ -1,5 +1,6 @@
 "use client";
 
+import { ClientDate } from "@/components/ClientDate";
 import { conditionLabel } from "@/components/Sparkline";
 import { useCurrentUser, useStore } from "@/lib/store";
 import { Bell, StretchHorizontal, Video } from "lucide-react";
@@ -81,7 +82,7 @@ export default function PatientDashboardPage() {
           ) : (
             <p className="mt-3 text-muted">No program yet. Your clinician will assign one soon.</p>
           )}
-          <Link href="/patient/program" className="btn btn-primary mt-4">
+          <Link href="/patient/exercise" className="btn btn-primary mt-4">
             Start exercises
           </Link>
         </article>
@@ -93,7 +94,7 @@ export default function PatientDashboardPage() {
             <>
               <p className="mt-3 text-lg font-medium">{nextCall.topic}</p>
               <p className="text-muted">
-                {new Date(nextCall.scheduledAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                <ClientDate iso={nextCall.scheduledAt} />
               </p>
               <Link href={`/consult/${nextCall.id}`} className="btn btn-primary mt-4">
                 Join visit
