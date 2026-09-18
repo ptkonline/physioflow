@@ -11,7 +11,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, type FieldPath } from "react-hook-form";
 
 const FileUploadField = dynamic(
@@ -41,9 +41,11 @@ export function DoctorRegisterForm() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [otp, setOtp] = useState("");
-  const [challenge, setChallenge] = useState("");
   const [awaitingOtp, setAwaitingOtp] = useState(false);
+  const [otpHint, setOtpHint] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const challengeRef = useRef("");
+  const sendingOtp = useRef(false);
   const form = useForm<DoctorRegisterValues>({
     resolver: zodResolver(doctorRegisterSchema),
     defaultValues: {
@@ -85,25 +87,51 @@ export function DoctorRegisterForm() {
     if (ok) setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
+  async function requestOtp(email: string) {
+    const clean = email.trim().toLowerCase();
+    if (!clean.includes("@") || sendingOtp.current) return;
+    sendingOtp.current = true;
+    try {
+      const res = await fetch("/api/auth/otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: clean, purpose: "register" }),
+      });
+      const body = (await res.json()) as { error?: string; challengeToken?: string; hint?: string };
+      if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
+      challengeRef.current = body.challengeToken;
+      setAwaitingOtp(true);
+      setOtpHint(body.hint || `We emailed a 6-digit code to ${clean}. It is valid for 30 minutes.`);
+    } finally {
+      sendingOtp.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (step !== 4) return;
+    const email = form.getValues("email");
+    if (!challengeRef.current) void requestOtp(email).catch((err) => {
+      setSubmitError(err instanceof Error ? err.message : "Could not send the verification code.");
+    });
+    else setAwaitingOtp(true);
+  }, [step, form]);
+
   async function onSubmit(values: DoctorRegisterValues) {
     setSubmitError("");
     try {
-      if (!awaitingOtp) {
-        const res = await fetch("/api/auth/otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: values.email, purpose: "register" }),
-        });
-        const body = (await res.json()) as { error?: string; challengeToken?: string };
-        if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
-        setChallenge(body.challengeToken);
-        setAwaitingOtp(true);
+      if (!challengeRef.current) {
+        await requestOtp(values.email);
+        return;
+      }
+      const code = otp.replace(/\D/g, "");
+      if (code.length !== 6) {
+        setSubmitError("Enter the 6-digit code from your email.");
         return;
       }
       const verified = await fetch("/api/auth/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: values.email, code: otp, challengeToken: challenge }),
+        body: JSON.stringify({ email: values.email, code, challengeToken: challengeRef.current }),
       });
       const body = (await verified.json()) as { error?: string; ok?: boolean };
       if (!verified.ok || !body.ok) throw new Error(body.error || "That code is not valid.");
@@ -300,15 +328,30 @@ export function DoctorRegisterForm() {
       {awaitingOtp && (
         <label className="block space-y-1">
           <span>Email verification code</span>
+          {otpHint && <p className="text-sm text-muted">{otpHint}</p>}
           <input
             className="field tracking-[0.3em]"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={6}
+            placeholder="6 digits"
             value={otp}
             onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
             required
           />
+          <button
+            type="button"
+            className="text-sm underline"
+            onClick={() => {
+              challengeRef.current = "";
+              setOtp("");
+              void requestOtp(form.getValues("email")).catch((err) => {
+                setSubmitError(err instanceof Error ? err.message : "Could not send the verification code.");
+              });
+            }}
+          >
+            Resend code
+          </button>
         </label>
       )}
       {submitError && <p className="text-rose">{submitError}</p>}
@@ -325,7 +368,7 @@ export function DoctorRegisterForm() {
           </button>
         ) : (
           <button className="btn btn-primary flex-1" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Please wait…" : awaitingOtp ? "Verify and submit" : "Send code and submit"}
+            {isSubmitting ? "Please wait…" : awaitingOtp ? "Verify and submit" : "Send verification code"}
           </button>
         )}
       </div>

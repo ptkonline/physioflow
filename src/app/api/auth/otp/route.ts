@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
   if (!email.includes("@")) {
     return Response.json({ error: "Enter a valid email." }, { status: 400 });
   }
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const exp = Date.now() + 10 * 60 * 1000;
+  const code = String(Math.floor(100000 + Math.random() * 900000)).padStart(6, "0");
+  const exp = Date.now() + 30 * 60 * 1000;
   const challengeToken = await signJson({
     email,
     purpose: body.purpose ?? "register",
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   await sendPlainEmail({
     to: email,
     subject: "Your PhysioFlow verification code",
-    text: `Your verification code is ${code}. It expires in 10 minutes.\n\nIf you did not request this, ignore the email.`,
+    text: `Your PhysioFlow verification code is ${code}. It is 6 digits and expires in 30 minutes.\n\nIf you did not request this, ignore the email.`,
   });
   return Response.json({
     challengeToken,

@@ -8,7 +8,7 @@ import { useStore } from "@/lib/store";
 import type { Condition, Role } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 export default function RegisterPage() {
   const { register } = useStore();
@@ -28,10 +28,10 @@ export default function RegisterPage() {
   const [hipaa, setHipaa] = useState(false);
   const [gdpr, setGdpr] = useState(false);
   const [otp, setOtp] = useState("");
-  const [challenge, setChallenge] = useState("");
   const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const challengeRef = useRef("");
 
   async function sendOtp() {
     const res = await fetch("/api/auth/otp", {
@@ -41,15 +41,17 @@ export default function RegisterPage() {
     });
     const body = (await res.json()) as { error?: string; challengeToken?: string };
     if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
-    setChallenge(body.challengeToken);
+    challengeRef.current = body.challengeToken;
     setAwaitingOtp(true);
   }
 
   async function verifyOtp() {
+    const code = otp.replace(/\D/g, "");
+    if (code.length !== 6) throw new Error("Enter the 6-digit code from your email.");
     const res = await fetch("/api/auth/otp/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code: otp, challengeToken: challenge }),
+      body: JSON.stringify({ email, code, challengeToken: challengeRef.current }),
     });
     const body = (await res.json()) as { error?: string; ok?: boolean };
     if (!res.ok || !body.ok) throw new Error(body.error || "That code is not valid.");
@@ -201,15 +203,28 @@ export default function RegisterPage() {
             {awaitingOtp && (
               <label className="block space-y-1">
                 <span>Email verification code</span>
+                <p className="text-sm text-muted">Enter the 6-digit code we emailed you. It lasts 30 minutes.</p>
                 <input
                   className="field tracking-[0.3em]"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={6}
+                  placeholder="6 digits"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   required
                 />
+                <button
+                  type="button"
+                  className="text-sm underline"
+                  onClick={() => {
+                    challengeRef.current = "";
+                    setOtp("");
+                    void sendOtp().catch((err) => setError(err instanceof Error ? err.message : "Could not send the code."));
+                  }}
+                >
+                  Resend code
+                </button>
               </label>
             )}
             {error && <p className="text-rose">{error}</p>}
