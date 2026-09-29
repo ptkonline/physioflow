@@ -97,11 +97,17 @@ export function DoctorRegisterForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: clean, purpose: "register" }),
       });
-      const body = (await res.json()) as { error?: string; challengeToken?: string; hint?: string };
+      const body = (await res.json()) as {
+        error?: string;
+        challengeToken?: string;
+        hint?: string;
+        devCode?: string;
+      };
       if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
       challengeRef.current = body.challengeToken;
       setAwaitingOtp(true);
       setOtpHint(body.hint || `We emailed a 6-digit code to ${clean}. It is valid for 30 minutes.`);
+      if (body.devCode) setOtp(body.devCode);
     } finally {
       sendingOtp.current = false;
     }

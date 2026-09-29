@@ -28,6 +28,7 @@ export default function RegisterPage() {
   const [hipaa, setHipaa] = useState(false);
   const [gdpr, setGdpr] = useState(false);
   const [otp, setOtp] = useState("");
+  const [otpHint, setOtpHint] = useState("");
   const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -39,9 +40,11 @@ export default function RegisterPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, purpose: "register" }),
     });
-    const body = (await res.json()) as { error?: string; challengeToken?: string };
+    const body = (await res.json()) as { error?: string; challengeToken?: string; hint?: string; devCode?: string };
     if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
     challengeRef.current = body.challengeToken;
+    setOtpHint(body.hint || "");
+    if (body.devCode) setOtp(body.devCode);
     setAwaitingOtp(true);
   }
 
@@ -203,7 +206,9 @@ export default function RegisterPage() {
             {awaitingOtp && (
               <label className="block space-y-1">
                 <span>Email verification code</span>
-                <p className="text-sm text-muted">Enter the 6-digit code we emailed you. It lasts 30 minutes.</p>
+                <p className="text-sm text-muted">
+                  {otpHint || "Enter the 6-digit code we emailed you. It lasts 30 minutes."}
+                </p>
                 <input
                   className="field tracking-[0.3em]"
                   inputMode="numeric"
