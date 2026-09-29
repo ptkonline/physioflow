@@ -1,5 +1,6 @@
 import { sendPlainEmail } from "@/lib/server/mail";
 import { digestOtp } from "@/lib/server/otp-digest";
+import { otpDeliveryResponse, otpDevFallbackEnabled } from "@/lib/server/otp-email-policy";
 import { canSignServerPayload, signJson } from "@/lib/server/signed-json";
 import { NextRequest } from "next/server";
 
@@ -28,13 +29,29 @@ export async function POST(request: NextRequest) {
     hash: await digestOtp(email, code),
     exp,
   });
-  await sendPlainEmail({
-    to: email,
-    subject: "Your PhysioFlow verification code",
-    text: `Your PhysioFlow verification code is ${code}. It is 6 digits and expires in 30 minutes.\n\nIf you did not request this, ignore the email.`,
-  });
-  return Response.json({
+  let sent = false;
+  try {
+    const result = await sendPlainEmail({
+      to: email,
+      subject: "Your PhysioFlow verification code",
+      text: `Your PhysioFlow verification code is ${code}. It is 6 digits and expires in 30 minutes.\n\nIf you did not request this, ignore the email.`,
+    });
+    sent = result.sent;
+  } catch (err) {
+    console.error("[otp] email send failed", err instanceof Error ? err.message : err);
+  }
+
+  const delivery = otpDeliveryResponse({
+    sent,
+    resendConfigured: Boolean(process.env.RESEND_API_KEY),
+    fallback: otpDevFallbackEnabled(),
+    code,
     challengeToken,
-    hint: process.env.RESEND_API_KEY ? undefined : "Email provider is not set. Check the server log for the code.",
   });
+
+  if (delivery.status === 200 && delivery.body.devCode) {
+    console.info(`[otp:dev] verification code for ${email}: ${delivery.body.devCode}`);
+  }
+
+  return Response.json(delivery.body, { status: delivery.status });
 }
