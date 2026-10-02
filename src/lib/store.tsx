@@ -31,8 +31,10 @@ import type {
   Role,
   User,
 } from "./types";
-import { DEFAULT_HOURS } from "./types";
-import type { DailyLog, PhysioService, Prescription, Review } from "./care-types";
+import { DEFAULT_HOURS, type WeekHours } from "./types";
+import type { ClinicLocation, DailyLog, DoctorPricing, PhysioService, Prescription, Review } from "./care-types";
+import { explainDoctorSaveError } from "./doctor-save-error";
+import { withTimeout } from "./with-timeout";
 import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
 import { hashPassword, isPasswordHashed, stripUserSecrets } from "./password";
 import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
@@ -91,6 +93,9 @@ type Action =
       qualifications?: string;
       userId?: string;
       services?: PhysioService[];
+      pricing?: DoctorPricing;
+      availability?: WeekHours;
+      clinicLocation?: ClinicLocation;
     }
   | { type: "adoptAccount"; user: User; profile?: PatientProfile; doctor?: DoctorProfile }
   | { type: "updateProfile"; profile: PatientProfile }
@@ -314,8 +319,12 @@ function reducer(state: AppState, action: Action): AppState {
                 phone: action.phone ?? "",
                 bio: action.bio ?? "",
                 qualifications: action.qualifications,
-                availability: DEFAULT_HOURS,
+                availability: action.availability ?? DEFAULT_HOURS,
                 services: action.services ?? [],
+                pricing: action.pricing,
+                clinicLocation: action.clinicLocation,
+                consultationFee: action.pricing?.onlineFee,
+                isVerified: false,
               },
             ]
           : state.doctors;
@@ -862,6 +871,9 @@ interface StoreValue {
     bio?: string;
     qualifications?: string;
     services?: PhysioService[];
+    pricing?: DoctorPricing;
+    availability?: WeekHours;
+    clinicLocation?: ClinicLocation;
   }) => Promise<boolean>;
   updateProfile: (profile: PatientProfile) => void;
   updateDoctor: (doctor: DoctorProfile) => void;
@@ -1085,11 +1097,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const register = useCallback(async (input: Parameters<StoreValue["register"]>[0]) => {
     const email = input.email.trim().toLowerCase();
-    if (state.users.some((u) => u.email.toLowerCase() === email)) return false;
+    const existing = state.users.find((u) => u.email.toLowerCase() === email);
+    if (existing && existing.role !== input.role) return false;
     if (!isFirebaseConfigured()) return false;
     const remote = await syncFirebaseAuth(email, input.password, { createIfMissing: true });
     if (!remote) return false;
-    const passwordHash = await hashPassword(input.password);
+    const passwordHash = await withTimeout(hashPassword(input.password), 20_000, "Securing your password");
     const user: User = {
       id: remote.uid,
       name: input.name.trim(),
@@ -1100,7 +1113,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       phone: input.phone,
       consentHipaa: true,
       consentGdpr: true,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
     };
     const profile: PatientProfile | undefined =
       input.role === "patient"
@@ -1128,12 +1141,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             phone: input.phone ?? "",
             bio: input.bio ?? "",
             qualifications: input.qualifications,
-            availability: DEFAULT_HOURS,
+            availability: input.availability ?? DEFAULT_HOURS,
             services: input.services ?? [],
+            pricing: input.pricing,
+            clinicLocation: input.clinicLocation,
+            consultationFee: input.pricing?.onlineFee,
             isVerified: false,
           }
         : undefined;
-    dispatch({ type: "register", ...input, email, userId: remote.uid, password: "", passwordHash });
+    if (!existing) {
+      dispatch({ type: "register", ...input, email, userId: remote.uid, password: "", passwordHash });
+    } else if (doctor) {
+      dispatch({ type: "updateDoctor", doctor });
+      if (existing.id !== remote.uid) {
+        dispatch({ type: "adoptAccount", user, doctor });
+      }
+    }
     sessionLock.current = remote.uid;
     try {
       localStorage.setItem(SESSION_KEY, remote.uid);
@@ -1143,8 +1166,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     try {
       await saveAccountBundle(user, { profile, doctor });
-    } catch {
-      /* Firestore rules may reject until Auth settles; the local profile still opens the portal. */
+    } catch (err) {
+      const error = new Error(
+        explainDoctorSaveError(err, {
+          bucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        }),
+      );
+      (error as Error & { accountReady?: boolean }).accountReady = true;
+      throw error;
     }
     return true;
   }, [state.users]);

@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
+import { withTimeout } from "./with-timeout";
 
 let auth: Auth | undefined;
 
@@ -34,14 +35,24 @@ export async function syncFirebaseAuth(
     await signOut(instance);
   }
   try {
-    return (await signInWithEmailAndPassword(instance, normalized, password)).user;
-  } catch {
+    return (await withTimeout(signInWithEmailAndPassword(instance, normalized, password), 20_000, "Signing in")).user;
+  } catch (err) {
+    if (err instanceof Error && /timed out/i.test(err.message)) throw err;
     if (!options.createIfMissing) return null;
     try {
-      const created = await createUserWithEmailAndPassword(instance, normalized, password);
-      await sendEmailVerification(created.user).catch(() => undefined);
+      const created = await withTimeout(
+        createUserWithEmailAndPassword(instance, normalized, password),
+        20_000,
+        "Creating your account",
+      );
+      // Verification email must not block signup. A stalled send leaves the button on "Please wait…".
+      await Promise.race([
+        sendEmailVerification(created.user).catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 5_000)),
+      ]);
       return created.user;
-    } catch {
+    } catch (createErr) {
+      if (createErr instanceof Error && /timed out/i.test(createErr.message)) throw createErr;
       return null;
     }
   }

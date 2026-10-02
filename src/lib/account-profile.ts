@@ -6,6 +6,7 @@ import { getFirebase } from "./firebase";
 import { normalizeServices } from "./services";
 import type { DoctorProfile, PatientProfile, User } from "./types";
 import { DEFAULT_HOURS } from "./types";
+import { withTimeout } from "./with-timeout";
 
 export async function saveAccountBundle(
   user: User,
@@ -13,20 +14,26 @@ export async function saveAccountBundle(
 ) {
   if (!isFirebaseConfigured()) return;
   const { db } = getFirebase();
-  await setDoc(
-    doc(db, "users", user.id),
-    {
-      email: user.email.trim().toLowerCase(),
-      name: user.name,
-      role: user.role,
-      phone: user.phone ?? "",
-      condition: extra?.profile?.condition ?? null,
-      goal: extra?.profile?.goal ?? null,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true },
+  await withTimeout(
+    setDoc(
+      doc(db, "users", user.id),
+      {
+        email: user.email.trim().toLowerCase(),
+        name: user.name,
+        role: user.role,
+        phone: user.phone ?? "",
+        condition: extra?.profile?.condition ?? null,
+        goal: extra?.profile?.goal ?? null,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    ),
+    15_000,
+    "Saving your profile",
   );
-  if (extra?.doctor) await persistDoctorPublic(extra.doctor, user.email);
+  if (extra?.doctor) {
+    await withTimeout(persistDoctorPublic(extra.doctor, user.email), 15_000, "Saving your public profile");
+  }
 }
 
 export async function loadAccountBundle(uid: string): Promise<{

@@ -10,8 +10,9 @@ import {
 } from "@/lib/doctor-register-schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
-import { isFirebaseConfigured } from "@/lib/firebase-config";
+import { missingFirebasePublicEnv } from "@/lib/firebase-config";
 import { useStore } from "@/lib/store";
+import { withTimeout } from "@/lib/with-timeout";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, type FieldPath } from "react-hook-form";
@@ -44,6 +45,8 @@ export function DoctorRegisterForm() {
   const { register: registerAccount } = useStore();
   const [step, setStep] = useState(0);
   const [submitError, setSubmitError] = useState("");
+  const [waiting, setWaiting] = useState(false);
+  const [accountReady, setAccountReady] = useState(false);
   const form = useForm<DoctorRegisterValues>({
     resolver: zodResolver(doctorRegisterSchema),
     defaultValues: {
@@ -75,7 +78,7 @@ export function DoctorRegisterForm() {
     trigger,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = form;
   const days = watch("availabilityDays") ?? [];
 
@@ -87,54 +90,76 @@ export function DoctorRegisterForm() {
 
   async function onSubmit(values: DoctorRegisterValues) {
     setSubmitError("");
-    if (!isFirebaseConfigured()) {
-      setSubmitError("Sign-up needs the UAT Firebase project. Add the Firebase keys, then try again.");
-      return;
-    }
+    setWaiting(true);
     try {
-      const ok = await registerAccount({
-        name: values.name,
-        email: values.email,
-        password: values.password,
-        role: "physio",
-        phone: values.phone,
-        specialty: values.specialization,
-        bio: values.clinicName,
-        qualifications: values.degree,
-        services: [
-          {
-            id: "svc-online",
-            name: "Online consultation",
-            description: "",
-            price: Math.round(values.onlineFee),
-            durationMin: 30,
-            mode: "online",
-            active: true,
+      const missing = missingFirebasePublicEnv();
+      if (missing.length > 0) {
+        setSubmitError(`Sign-up needs Firebase. Missing: ${missing.join(", ")}.`);
+        return;
+      }
+      const ok = await withTimeout(
+        registerAccount({
+          name: values.name,
+          email: values.email,
+          password: values.password,
+          role: "physio",
+          phone: values.phone,
+          specialty: values.specialization,
+          bio: values.clinicName,
+          qualifications: values.degree,
+          pricing: {
+            onlineFee: Math.round(values.onlineFee),
+            offlineFee: Math.round(values.offlineFee),
+            currency: "INR",
           },
-          {
-            id: "svc-clinic",
-            name: "Clinic visit",
-            description: "",
-            price: Math.round(values.offlineFee),
-            durationMin: 30,
-            mode: "offline",
-            active: true,
+          availability: {
+            days: values.availabilityDays,
+            startHour: values.startHour,
+            endHour: values.endHour,
+            slotMin: 30,
           },
-        ],
-      });
+          clinicLocation: {
+            latitude: values.latitude,
+            longitude: values.longitude,
+            address: values.address,
+          },
+          services: [
+            {
+              id: "svc-online",
+              name: "Online consultation",
+              description: "",
+              price: Math.round(values.onlineFee),
+              durationMin: 30,
+              mode: "online",
+              active: true,
+            },
+            {
+              id: "svc-clinic",
+              name: "Clinic visit",
+              description: "",
+              price: Math.round(values.offlineFee),
+              durationMin: 30,
+              mode: "offline",
+              active: true,
+            },
+          ],
+        }),
+        25_000,
+        "Creating your account",
+      );
       if (!ok) {
         setSubmitError("That email is already in use, or the password was rejected.");
         return;
       }
-      try {
-        const { submitDoctorApplication } = await import("@/lib/submit-doctor-application");
-        await submitDoctorApplication(values);
-      } catch {
-        /* Account is ready even if document upload is still pending. */
-      }
+      setAccountReady(true);
+      const { submitDoctorApplication } = await import("@/lib/submit-doctor-application");
+      await withTimeout(submitDoctorApplication(values), 45_000, "Saving documents");
       router.replace("/doctor/services");
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Could not create the account.");
+      if (err && typeof err === "object" && "accountReady" in err) setAccountReady(true);
+      setSubmitError(err instanceof Error ? err.message : "Could not save the doctor profile.");
+    } finally {
+      setWaiting(false);
     }
   }
 
@@ -320,7 +345,16 @@ export function DoctorRegisterForm() {
         </div>
       )}
 
-      {submitError && <p className="text-rose">{submitError}</p>}
+      {submitError && (
+        <div className="space-y-2">
+          <p className="text-rose">{submitError}</p>
+          {accountReady && (
+            <button type="button" className="btn btn-ghost w-full" onClick={() => router.replace("/doctor/services")}>
+              Continue to portal
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-3">
         {step > 0 && (
@@ -333,8 +367,8 @@ export function DoctorRegisterForm() {
             Continue
           </button>
         ) : (
-          <button className="btn btn-primary flex-1" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Please wait…" : "Create account"}
+          <button className="btn btn-primary flex-1" type="submit" disabled={waiting}>
+            {waiting ? "Please wait…" : "Create account"}
           </button>
         )}
       </div>
