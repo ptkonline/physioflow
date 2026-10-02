@@ -1,21 +1,17 @@
 "use client";
 
 import { Logo } from "@/components/Logo";
-import { revokeAdminSession } from "@/lib/admin-actions";
-import { useStore } from "@/lib/store";
 import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 export function AdminChrome({ email, children }: { email: string; children: ReactNode }) {
-  const { logout } = useStore();
   const router = useRouter();
 
   async function signOut() {
-    await revokeAdminSession();
-    logout();
-    router.replace("/login");
+    await fetch("/api/admin/session", { method: "DELETE" });
+    router.replace("/admin/login");
   }
 
   return (

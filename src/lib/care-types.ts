@@ -89,6 +89,19 @@ export interface DoctorPricing {
   currency: string;
 }
 
+export type ServiceMode = VisitMode | "both";
+
+/** A named treatment a doctor sells at their own price. */
+export interface PhysioService {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  durationMin: number;
+  mode: ServiceMode;
+  active: boolean;
+}
+
 export type VisitMode = "online" | "offline";
 
 export interface DailyLog {

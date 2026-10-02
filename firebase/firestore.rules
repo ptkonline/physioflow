@@ -41,7 +41,9 @@ service cloud.firestore {
             && request.resource.data.pricing.onlineFee > 0
             && request.resource.data.pricing.offlineFee is number
             && request.resource.data.pricing.offlineFee > 0
-          )));
+          ))
+          && (!("services" in request.resource.data)
+            || (request.resource.data.services is list && request.resource.data.services.size() <= 40)));
       allow delete: if isPlatformAdmin();
     }
 

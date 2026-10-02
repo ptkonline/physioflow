@@ -2,6 +2,7 @@ import { doc, setDoc } from "firebase/firestore";
 import type { DoctorProfile } from "./types";
 import { isFirebaseConfigured } from "./firebase-config";
 import { getFirebase } from "./firebase";
+import { normalizeServices } from "./services";
 
 export async function persistDoctorPublic(doctor: DoctorProfile, email: string) {
   if (!isFirebaseConfigured()) return;
@@ -19,6 +20,7 @@ export async function persistDoctorPublic(doctor: DoctorProfile, email: string) 
       clinicLocation: doctor.clinicLocation ?? null,
       pricing: doctor.pricing ?? null,
       consultationFee: doctor.consultationFee ?? doctor.pricing?.onlineFee ?? null,
+      services: normalizeServices(doctor.services),
       updatedAt: new Date().toISOString(),
     },
     { merge: true },

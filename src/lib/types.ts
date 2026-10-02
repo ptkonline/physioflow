@@ -1,4 +1,4 @@
-import type { DailyLog, DoctorLocation, DoctorPricing, ClinicLocation, Prescription, Review, VisitMode } from "./care-types";
+import type { DailyLog, DoctorLocation, DoctorPricing, ClinicLocation, PhysioService, Prescription, Review, VisitMode } from "./care-types";
 
 export type Role = "patient" | "physio";
 
@@ -72,6 +72,7 @@ export interface DoctorProfile {
   clinicLocation?: ClinicLocation;
   consultationFee?: number;
   pricing?: DoctorPricing;
+  services?: PhysioService[];
 }
 
 export type PaymentStatus = "pending" | "success" | "failed" | "refunded";
@@ -104,6 +105,8 @@ export interface Booking {
   paidAt?: string;
   consultationFee?: number;
   platformFee?: number;
+  serviceId?: string;
+  serviceName?: string;
   mode?: VisitMode;
   finalPrice?: number;
   clinicAddress?: string;

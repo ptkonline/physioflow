@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 export default function PrivacyCenter() {
   const { user } = useCurrentUser();
-  const { state, deleteAccount, resetDemo } = useStore();
+  const { state, deleteAccount } = useStore();
   const router = useRouter();
   if (!user) return null;
   const userId = user.id;
@@ -62,9 +62,6 @@ export default function PrivacyCenter() {
               }}
             >
               Delete account
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={resetDemo}>
-              Reset demo
             </button>
           </div>
         </article>
