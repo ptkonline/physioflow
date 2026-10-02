@@ -27,8 +27,8 @@ export default function DoctorDashboardPage() {
           <p className="text-muted">Clinician workspace · {clinicId}</p>
           <h1 className="text-3xl font-semibold">{user.name}</h1>
         </div>
-        <Link href="/doctor/availability" className="btn btn-ghost">
-          Set hours
+        <Link href="/doctor/services" className="btn btn-primary">
+          Treatments and prices
         </Link>
       </header>
       <div className="grid gap-4 md:grid-cols-3">

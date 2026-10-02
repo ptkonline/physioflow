@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f4f1ea;
-  --bg-elev: #fffcf7;
-  --ink: #1f2a24;
-  --muted: #5d6b64;
-  --line: #d9d2c5;
-  --teal: #0f6e62;
-  --teal-dark: #0b534a;
-  --sage: #cfe4d8;
-  --sand: #efe4cf;
-  --rose: #c45c4a;
+  --bg: #f3f6f4;
+  --bg-elev: #ffffff;
+  --ink: #14211c;
+  --muted: #5c6b64;
+  --line: #e3e8e4;
+  --teal: #0e8f78;
+  --teal-dark: #0b6b5c;
+  --sage: #e5f6ef;
+  --sand: #f6f1e6;
+  --rose: #c4473a;
   --amber: #c9892d;
 }
 
@@ -43,7 +43,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-plus-jakarta), system-ui, sans-serif;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.5;
 }
 
@@ -66,8 +66,8 @@ a {
 .card {
   background: var(--bg-elev);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  box-shadow: 0 8px 30px rgba(31, 42, 36, 0.04);
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(20, 33, 28, 0.05);
 }
 
 .btn {
@@ -75,11 +75,11 @@ a {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 48px;
-  padding: 0.7rem 1.15rem;
-  border-radius: 14px;
+  min-height: 52px;
+  padding: 0.75rem 1.15rem;
+  border-radius: 16px;
   border: 1px solid transparent;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   text-decoration: none;
 }
@@ -110,12 +110,13 @@ a {
 
 .field {
   width: 100%;
-  min-height: 48px;
-  padding: 0.7rem 0.9rem;
-  border-radius: 12px;
+  min-height: 52px;
+  padding: 0.75rem 0.95rem;
+  border-radius: 16px;
   border: 1px solid var(--line);
   background: white;
   color: var(--ink);
+  font-size: 16px;
 }
 
 .chip {
@@ -128,6 +129,75 @@ a {
   color: var(--teal-dark);
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.service-card {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  min-height: 76px;
+  padding: 0.95rem 1rem;
+  border-radius: 20px;
+  border: 1.5px solid var(--line);
+  background: white;
+  text-align: left;
+  color: inherit;
+}
+
+.service-card.on {
+  border-color: var(--teal);
+  background: #f3fbf8;
+  box-shadow: 0 0 0 3px rgba(14, 143, 120, 0.14);
+}
+
+.price-tag {
+  font-weight: 800;
+  font-size: 1.15rem;
+  white-space: nowrap;
+}
+
+.step-track {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.step-track span {
+  height: 6px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.step-track span.is-current,
+.step-track span.is-done {
+  background: var(--teal);
+}
+
+.flow-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.flow-next {
+  flex: 1;
+}
+
+.mobile-tabbar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 30;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-tabbar a {
+  min-height: 64px;
 }
 
 .sr-only {

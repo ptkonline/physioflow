@@ -70,8 +70,5 @@ export async function ensureFirebaseSession(email?: string) {
   if (instance.currentUser?.email?.toLowerCase() === normalized) {
     return instance.currentUser;
   }
-  if (normalized.endsWith("@demo.physio")) {
-    return syncFirebaseAuth(normalized, "demo123", { createIfMissing: true });
-  }
   return instance.currentUser;
 }

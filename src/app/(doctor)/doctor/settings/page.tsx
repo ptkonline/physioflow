@@ -19,7 +19,7 @@ const DAY_OPTIONS = [
 
 export default function PhysioSettings() {
   const { user } = useCurrentUser();
-  const { state, resetDemo, updateDoctor, addNotification } = useStore();
+  const { state, updateDoctor, addNotification } = useStore();
   const existing = user ? state.doctors.find((d) => d.userId === user.id) : undefined;
   const [hours, setHours] = useState<WeekHours>(existing?.availability ?? DEFAULT_HOURS);
   const [saved, setSaved] = useState(false);
@@ -133,12 +133,12 @@ export default function PhysioSettings() {
           This workspace keeps an access log for patient records. A production deployment would add encryption at rest,
           MFA, and a HIPAA-eligible host.
         </p>
+        <Link href="/doctor/services" className="btn btn-primary inline-flex">
+          Treatments and prices
+        </Link>
         <Link href="/privacy" className="btn btn-ghost inline-flex">
           Privacy notice
         </Link>
-        <button type="button" className="btn btn-ghost" onClick={resetDemo}>
-          Reset demo data
-        </button>
       </article>
       <article className="card p-5">
         <h2 className="font-semibold">Audit log</h2>

@@ -11,6 +11,7 @@
  * doctors_public/{doctorId}
  *   clinicLocation { latitude, longitude, address }
  *   pricing { onlineFee, offlineFee, currency }
+ *   services[] { id, name, description, price, durationMin, mode, active }
  * booking_slots/{physioId}_{slotMs} — unique lock for (doctor, scheduledAt)
  * programs/{id} + patient_programs/{patientId}_{programId}
  * bookings/{id}
