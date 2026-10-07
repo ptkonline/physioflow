@@ -11,14 +11,16 @@ type AdminDb = {
   };
 };
 
-let cached: AdminDb | null | undefined;
+type AdminModule = typeof import("firebase-admin");
 
-export async function getAdminDb(): Promise<AdminDb | null> {
-  if (cached !== undefined) return cached;
+let adminApp: AdminModule | null | undefined;
+
+async function loadFirebaseAdmin(): Promise<AdminModule | null> {
+  if (adminApp !== undefined) return adminApp;
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim();
   if (!raw || !projectId) {
-    cached = null;
+    adminApp = null;
     return null;
   }
   try {
@@ -33,11 +35,23 @@ export async function getAdminDb(): Promise<AdminDb | null> {
         }),
       });
     }
-    cached = admin.firestore() as unknown as AdminDb;
-    return cached;
+    adminApp = admin;
+    return admin;
   } catch (err) {
     console.warn("[firebase-admin]", err instanceof Error ? err.message : err);
-    cached = null;
+    adminApp = null;
     return null;
   }
+}
+
+export async function getAdminDb(): Promise<AdminDb | null> {
+  const admin = await loadFirebaseAdmin();
+  if (!admin) return null;
+  return admin.firestore() as unknown as AdminDb;
+}
+
+export async function getAdminAuth() {
+  const admin = await loadFirebaseAdmin();
+  if (!admin) return null;
+  return admin.auth();
 }
