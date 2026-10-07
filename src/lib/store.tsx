@@ -35,12 +35,14 @@ import { DEFAULT_HOURS, type WeekHours } from "./types";
 import type { ClinicLocation, DailyLog, DoctorPricing, PhysioService, Prescription, Review } from "./care-types";
 import { explainDoctorSaveError } from "./doctor-save-error";
 import { withTimeout } from "./with-timeout";
-import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
+import { clearFirebaseAuth, getFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
+import { onAuthStateChanged } from "firebase/auth";
 import { hashPassword, isPasswordHashed, stripUserSecrets } from "./password";
 import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
 import { persistProgram } from "./persist-program";
 import { notifyFcm } from "./notifications";
 import { clearAuthCookies, setAuthCookies } from "./auth-session";
+import { ensureUserUhid } from "./uhid";
 
 const STORAGE_KEY = "physioflow.v4";
 const LEGACY_KEY = "physioflow.v3";
@@ -97,6 +99,7 @@ type Action =
       availability?: WeekHours;
       clinicLocation?: ClinicLocation;
     }
+  | { type: "setUhid"; userId: string; uhid: string }
   | { type: "adoptAccount"; user: User; profile?: PatientProfile; doctor?: DoctorProfile }
   | { type: "updateProfile"; profile: PatientProfile }
   | { type: "updateDoctor"; doctor: DoctorProfile }
@@ -269,6 +272,16 @@ function reducer(state: AppState, action: Action): AppState {
         : state.doctors;
       return { ...state, users, profiles, doctors, currentUserId: user.id };
     }
+    case "setUhid":
+      return {
+        ...state,
+        users: state.users.map((user) =>
+          user.id === action.userId && !user.uhid ? { ...user, uhid: action.uhid } : user,
+        ),
+        doctors: (state.doctors ?? []).map((doctor) =>
+          doctor.userId === action.userId && !doctor.uhid ? { ...doctor, uhid: action.uhid } : doctor,
+        ),
+      };
     case "register": {
       if (state.users.some((u) => u.email.toLowerCase() === action.email.toLowerCase())) {
         return state;
@@ -956,6 +969,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [secretsReady, setSecretsReady] = useState(false);
   const sessionLock = useRef<string | null>(null);
 
+  const currentUhid = state.users.find((user) => user.id === state.currentUserId)?.uhid;
+
+  useEffect(() => {
+    if (!hydrated || !state.currentUserId || currentUhid) return;
+    const userId = state.currentUserId;
+    let cancelled = false;
+    void (async () => {
+      const auth = getFirebaseAuth();
+      if (auth) {
+        await new Promise<void>((resolve) => {
+          const unsubscribe = onAuthStateChanged(auth, () => {
+            unsubscribe();
+            resolve();
+          });
+        });
+      }
+      if (cancelled) return;
+      const uhid = await ensureUserUhid(userId);
+      if (!cancelled && uhid) dispatch({ type: "setUhid", userId, uhid });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, state.currentUserId, currentUhid]);
+
   useLayoutEffect(() => {
     const cached = readVaultSync();
     if (cached && !sessionLock.current) dispatch({ type: "hydrate", state: cached });
@@ -1064,11 +1102,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!remote) return false;
 
     let found = state.users.find((user) => user.id === remote.uid || user.email.toLowerCase() === normalizedEmail);
+    let loadedRemote = false;
     if (!found || found.id !== remote.uid) {
       const bundle = await loadAccountBundle(remote.uid);
+      loadedRemote = true;
       if (bundle) {
         dispatch({ type: "adoptAccount", user: bundle.user, profile: bundle.profile, doctor: bundle.doctor });
         found = bundle.user;
+      }
+    }
+    if (found && !loadedRemote && !found.uhid) {
+      try {
+        const uhid = await ensureUserUhid(remote.uid);
+        if (uhid) {
+          dispatch({ type: "setUhid", userId: remote.uid, uhid });
+          found = { ...found, uhid };
+        }
+      } catch {
+        /* Existing login still opens. The next profile load retries the hospital ID. */
       }
     }
     if (!found) return false;
@@ -1165,7 +1216,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
     try {
-      await saveAccountBundle(user, { profile, doctor });
+      const uhid = await saveAccountBundle(user, { profile, doctor });
+      if (uhid) dispatch({ type: "setUhid", userId: remote.uid, uhid });
     } catch (err) {
       const error = new Error(
         explainDoctorSaveError(err, {

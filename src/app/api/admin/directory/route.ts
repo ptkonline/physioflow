@@ -30,6 +30,7 @@ export async function GET() {
       name: String(data.name ?? ""),
       email: String(data.email ?? ""),
       role: String(data.role ?? ""),
+      uhid: typeof data.uhid === "string" ? data.uhid : "",
     };
   });
   const doctors = doctorsSnap.docs.map((doc) => {
@@ -39,6 +40,7 @@ export async function GET() {
       email: String(data.email ?? ""),
       specialty: String(data.specialty ?? ""),
       isVerified: Boolean(data.isVerified),
+      uhid: typeof data.uhid === "string" ? data.uhid : "",
     };
   });
   return Response.json({ users, doctors });

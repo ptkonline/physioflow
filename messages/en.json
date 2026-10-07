@@ -115,6 +115,10 @@
     "offline": "At the clinic",
     "both": "Online or clinic"
   },
+  "account": {
+    "uhid": "UHID",
+    "uhidHint": "Hospital ID. This number stays with the account."
+  },
   "admin": {
     "badge": "Admin only",
     "title": "Clinic admin sign-in",

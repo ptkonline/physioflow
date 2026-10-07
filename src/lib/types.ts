@@ -26,6 +26,8 @@ export interface User {
   consentHipaa: boolean;
   consentGdpr: boolean;
   createdAt: string;
+  /** Permanent hospital ID, `PF-` plus 8 digits. Separate from the Firebase Auth uid. */
+  uhid?: string;
 }
 
 export interface WeekHours {
@@ -73,6 +75,8 @@ export interface DoctorProfile {
   consultationFee?: number;
   pricing?: DoctorPricing;
   services?: PhysioService[];
+  /** Same permanent hospital ID as `users/{uid}.uhid`. */
+  uhid?: string;
 }
 
 export type PaymentStatus = "pending" | "success" | "failed" | "refunded";

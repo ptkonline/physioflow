@@ -1,5 +1,6 @@
 "use client";
 
+import { UhidLine } from "@/components/account/UhidLine";
 import { CONDITIONS, GOALS } from "@/lib/seed";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useCurrentUser, useStore } from "@/lib/store";
@@ -34,6 +35,9 @@ export default function PatientSettings() {
   return (
     <div className="space-y-5">
       <h1 className="text-3xl font-semibold">Settings & privacy</h1>
+      <article className="card p-5">
+        <UhidLine uhid={user.uhid} />
+      </article>
       <article className="card space-y-3 p-5">
         <h2 className="font-semibold">Language</h2>
         <p className="text-muted">Buttons and labels follow this preference on this device.</p>

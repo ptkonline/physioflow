@@ -1,11 +1,13 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-type DirectoryUser = { id: string; name: string; email: string; role: string };
-type DirectoryDoctor = { id: string; email: string; specialty: string; isVerified: boolean };
+type DirectoryUser = { id: string; name: string; email: string; role: string; uhid?: string };
+type DirectoryDoctor = { id: string; email: string; specialty: string; isVerified: boolean; uhid?: string };
 
 export function AdminDashboard() {
+  const t = useTranslations("account");
   const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [doctors, setDoctors] = useState<DirectoryDoctor[]>([]);
   const [warning, setWarning] = useState("");
@@ -95,6 +97,7 @@ export function AdminDashboard() {
               <div>
                 <p className="font-semibold">{user.name || user.email}</p>
                 <p className="text-sm text-muted">{user.email}</p>
+                <p className="text-sm text-muted">{t("uhid")} {user.uhid || "—"}</p>
               </div>
               <button type="button" className="btn btn-ghost" disabled={busyId === user.id} onClick={() => void act("delete", user.id)}>
                 Remove
@@ -121,6 +124,8 @@ export function AdminDashboard() {
                     {user.email}
                     {profile?.specialty ? ` · ${profile.specialty}` : ""}
                     {verified ? " · verified" : " · pending"}
+                    {" · "}
+                    {t("uhid")} {user.uhid || profile?.uhid || "—"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

@@ -1,5 +1,6 @@
 "use client";
 
+import { UhidLine } from "@/components/account/UhidLine";
 import { ClientDate } from "@/components/ClientDate";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { SlotCalendar } from "@/components/SlotCalendar";
@@ -51,6 +52,9 @@ export default function PhysioSettings() {
   return (
     <div className="space-y-5">
       <h1 className="text-3xl font-semibold">Clinic settings</h1>
+      <article className="card p-5">
+        <UhidLine uhid={user.uhid} />
+      </article>
 
       <form onSubmit={onSaveAvailability} className="card space-y-4 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
