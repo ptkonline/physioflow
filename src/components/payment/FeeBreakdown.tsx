@@ -5,8 +5,8 @@ import { formatInr, type FeeQuote } from "@/lib/pricing";
 export function FeeBreakdown({ quote }: { quote: FeeQuote }) {
   return (
     <dl className="space-y-2 rounded-2xl bg-white p-4 ring-1 ring-line">
-      <div className="flex justify-between">
-        <dt className="text-muted">Consultation fee</dt>
+      <div className="flex justify-between gap-3">
+        <dt className="text-muted">{quote.serviceName || "Consultation fee"}</dt>
         <dd>{formatInr(quote.consultationFee)}</dd>
       </div>
       <div className="flex justify-between">

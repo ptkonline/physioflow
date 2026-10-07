@@ -624,3 +624,22 @@ export const seedVideos: LibraryVideo[] = [
     isPublic: true,
   },
 ];
+
+/** Exercise catalog only. Demo people and passwords stay out of the live app. */
+export const liveState: AppState = {
+  currentUserId: null,
+  users: [],
+  profiles: [],
+  doctors: [],
+  exercises: seedState.exercises,
+  programs: [],
+  completions: [],
+  painLogs: [],
+  consults: [],
+  bookings: [],
+  notifications: [],
+  audit: [],
+  reviews: [],
+  prescriptions: [],
+  dailyLogs: [],
+};

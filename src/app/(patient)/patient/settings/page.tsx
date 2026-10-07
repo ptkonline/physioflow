@@ -1,5 +1,6 @@
 "use client";
 
+import { UhidLine } from "@/components/account/UhidLine";
 import { CONDITIONS, GOALS } from "@/lib/seed";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useCurrentUser, useStore } from "@/lib/store";
@@ -9,7 +10,7 @@ import { useRouter } from "next/navigation";
 
 export default function PatientSettings() {
   const { user, profile } = useCurrentUser();
-  const { state, updateProfile, deleteAccount, resetDemo } = useStore();
+  const { state, updateProfile, deleteAccount } = useStore();
   const router = useRouter();
   if (!user || !profile) return null;
   const userId = user.id;
@@ -34,6 +35,9 @@ export default function PatientSettings() {
   return (
     <div className="space-y-5">
       <h1 className="text-3xl font-semibold">Settings & privacy</h1>
+      <article className="card p-5">
+        <UhidLine uhid={user.uhid} />
+      </article>
       <article className="card space-y-3 p-5">
         <h2 className="font-semibold">Language</h2>
         <p className="text-muted">Buttons and labels follow this preference on this device.</p>
@@ -70,7 +74,7 @@ export default function PatientSettings() {
       </form>
       <article className="card space-y-3 p-5">
         <h2 className="font-semibold">Your data rights</h2>
-        <p className="text-muted">Export a copy or delete this demo account. See the privacy notice for how a clinic would handle PHI.</p>
+        <p className="text-muted">Export a copy or delete this account. See the privacy notice for how a clinic would handle health information.</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn btn-ghost" onClick={exportData}>
             Export JSON
@@ -87,9 +91,6 @@ export default function PatientSettings() {
             }}
           >
             Delete account
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={resetDemo}>
-            Reset demo data
           </button>
         </div>
       </article>

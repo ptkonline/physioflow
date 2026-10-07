@@ -21,6 +21,19 @@ service cloud.firestore {
     function isParticipant(patientId, doctorId) {
       return signedIn() && (request.auth.uid == patientId || request.auth.uid == doctorId);
     }
+    function validUhid(value) {
+      return value is string && value.matches('^PF-[0-9]{8}$');
+    }
+    function uhidUnchangedOrNew() {
+      return !('uhid' in request.resource.data)
+        || (
+          validUhid(request.resource.data.uhid)
+          && (
+            !('uhid' in resource.data)
+            || resource.data.uhid == request.resource.data.uhid
+          )
+        );
+    }
 
     match /doctors_pending_verification/{id} {
       allow create: if request.resource.data.status == "pending";
@@ -31,17 +44,21 @@ service cloud.firestore {
       allow read: if true;
       allow create: if signedIn()
         && (request.auth.uid == doctorId || emailIs(request.resource.data.email))
-        && request.resource.data.get("isVerified", false) == false;
+        && request.resource.data.get("isVerified", false) == false
+        && (!('uhid' in request.resource.data) || validUhid(request.resource.data.uhid));
       allow update: if isPlatformAdmin()
         || (signedIn()
           && (request.auth.uid == doctorId || emailIs(resource.data.email) || emailIs(request.resource.data.email))
           && request.resource.data.get("isVerified", false) == resource.data.get("isVerified", false)
+          && uhidUnchangedOrNew()
           && (!("pricing" in request.resource.data) || (
             request.resource.data.pricing.onlineFee is number
             && request.resource.data.pricing.onlineFee > 0
             && request.resource.data.pricing.offlineFee is number
             && request.resource.data.pricing.offlineFee > 0
-          )));
+          ))
+          && (!("services" in request.resource.data)
+            || (request.resource.data.services is list && request.resource.data.services.size() <= 40)));
       allow delete: if isPlatformAdmin();
     }
 
@@ -134,11 +151,40 @@ service cloud.firestore {
         || emailIs(resource.data.email)
         || isPlatformAdmin()
       );
-      allow create, update: if signedIn() && (
+      allow create: if signedIn() && (
         request.auth.uid == userId
         || emailIs(request.resource.data.email)
-      );
+      ) && (!('uhid' in request.resource.data) || validUhid(request.resource.data.uhid));
+      allow update: if signedIn() && (
+        request.auth.uid == userId
+        || emailIs(request.resource.data.email)
+      ) && uhidUnchangedOrNew();
       allow delete: if isPlatformAdmin();
+    }
+
+    match /counters/{counterId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && counterId == "uhid"
+        && request.resource.data.next is int
+        && request.resource.data.next == 1;
+      allow update: if signedIn()
+        && counterId == "uhid"
+        && request.resource.data.next is int
+        && resource.data.next is int
+        && request.resource.data.next == resource.data.next + 1;
+      allow delete: if false;
+    }
+
+    match /uhids/{uhid} {
+      allow get: if signedIn() && (
+        resource.data.uid == request.auth.uid || isPlatformAdmin()
+      );
+      allow list: if isPlatformAdmin();
+      allow create: if signedIn()
+        && uhid.matches('^PF-[0-9]{8}$')
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
     }
 
     match /daily_logs/{logId} {

@@ -8,6 +8,7 @@ export interface FeeQuote {
   amount: number;
   amountPaise: number;
   currency: "INR";
+  serviceName?: string;
 }
 
 export interface AppointmentDraft {
@@ -26,6 +27,9 @@ export interface AppointmentDraft {
   mode?: VisitMode;
   onlineFee?: number;
   offlineFee?: number;
+  serviceId?: string;
+  serviceName?: string;
+  servicePrice?: number;
 }
 
 export interface PaymentOrderRecord {
@@ -50,7 +54,7 @@ export const SEED_PRICING: Record<string, DoctorPricing> = {
   "physio-aisha": { onlineFee: 1800, offlineFee: 2200, currency: "INR" },
 };
 
-function validFee(value: unknown) {
+export function validFee(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 100 && value <= 100000;
 }
 
@@ -103,9 +107,10 @@ export function quoteFees(
   doctorId: string,
   profileFee?: number,
   mode: VisitMode = "online",
-  extra?: { onlineFee?: number; offlineFee?: number; pricing?: DoctorPricing },
+  extra?: { onlineFee?: number; offlineFee?: number; pricing?: DoctorPricing; servicePrice?: number; serviceName?: string },
 ): FeeQuote {
-  const consultationFee = consultationFeeInr(doctorId, profileFee, mode, extra);
+  const servicePrice = validFee(extra?.servicePrice) ? Math.round(extra.servicePrice) : undefined;
+  const consultationFee = servicePrice ?? consultationFeeInr(doctorId, profileFee, mode, extra);
   const platformFee = platformFeeInr();
   const amount = consultationFee + platformFee;
   return {
@@ -114,6 +119,7 @@ export function quoteFees(
     amount,
     amountPaise: amount * 100,
     currency: "INR",
+    serviceName: extra?.serviceName,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { DailyLog, DoctorLocation, DoctorPricing, ClinicLocation, Prescription, Review, VisitMode } from "./care-types";
+import type { DailyLog, DoctorLocation, DoctorPricing, ClinicLocation, PhysioService, Prescription, Review, VisitMode } from "./care-types";
 
 export type Role = "patient" | "physio";
 
@@ -26,6 +26,8 @@ export interface User {
   consentHipaa: boolean;
   consentGdpr: boolean;
   createdAt: string;
+  /** Permanent hospital ID, `PF-` plus 8 digits. Separate from the Firebase Auth uid. */
+  uhid?: string;
 }
 
 export interface WeekHours {
@@ -72,6 +74,9 @@ export interface DoctorProfile {
   clinicLocation?: ClinicLocation;
   consultationFee?: number;
   pricing?: DoctorPricing;
+  services?: PhysioService[];
+  /** Same permanent hospital ID as `users/{uid}.uhid`. */
+  uhid?: string;
 }
 
 export type PaymentStatus = "pending" | "success" | "failed" | "refunded";
@@ -104,6 +109,8 @@ export interface Booking {
   paidAt?: string;
   consultationFee?: number;
   platformFee?: number;
+  serviceId?: string;
+  serviceName?: string;
   mode?: VisitMode;
   finalPrice?: number;
   clinicAddress?: string;
