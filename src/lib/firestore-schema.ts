@@ -3,14 +3,17 @@
  *
  * videos/{videoId}
  * chats/{appointmentId}/messages/{messageId}
- * users/{uid} — profileImageUrl, locale, fcmToken
+ * users/{uid} — profileImageUrl, locale, fcmToken, uhid (PF-00000001, allocated from counters/uhid)
+ * uhids/{uhid} — claim record { uid } so a hospital ID is never reused
+ * counters/uhid — { next } sequence for the next UHID
  * reviews/{reviewId}
  * prescriptions/{id}
  * daily_logs/{id} — one check-in per patient per calendar day
  * reminder_dispatches/{id} — 24h / 1h appointment reminders already sent
- * doctors_public/{doctorId}
+ * doctors_public/{doctorId} — uhid mirrors users/{uid}.uhid when the doctor profile exists
  *   clinicLocation { latitude, longitude, address }
  *   pricing { onlineFee, offlineFee, currency }
+ *   services[] { id, name, description, price, durationMin, mode, active }
  * booking_slots/{physioId}_{slotMs} — unique lock for (doctor, scheduledAt)
  * programs/{id} + patient_programs/{patientId}_{programId}
  * bookings/{id}

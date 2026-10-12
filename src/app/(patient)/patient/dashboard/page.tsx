@@ -34,6 +34,9 @@ export default function PatientDashboardPage() {
 
   return (
     <div className="space-y-6">
+      <Link href="/patient/doctors" className="btn btn-primary w-full">
+        Book a treatment
+      </Link>
       <header>
         <p className="text-muted">Hello</p>
         <h1 className="text-3xl font-semibold">{user.name}</h1>

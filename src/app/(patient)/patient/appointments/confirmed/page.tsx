@@ -27,10 +27,11 @@ function ConfirmedBody() {
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <div className="card space-y-3 p-6">
-        <p className="chip">Paid</p>
-        <h1 className="text-3xl font-semibold">Booking confirmed</h1>
+        <p className="chip">You are booked</p>
+        <h1 className="text-3xl font-semibold">That is confirmed</h1>
         <p>
-          Your visit with {doctor?.name} is booked. The doctor has been notified.
+          {booking.serviceName ? `${booking.serviceName} with ` : "Your visit with "}
+          {doctor?.name} is on the calendar.
         </p>
         <p className="text-muted">{booking.reason}</p>
         {booking.amount != null && (

@@ -1,9 +1,16 @@
 import { sendPlainEmail } from "@/lib/server/mail";
 import { digestOtp } from "@/lib/server/otp-digest";
+import { isAuthOtpEnabled, isPhoneOtpEnabled } from "@/lib/server/otp-policy";
 import { canSignServerPayload, signJson } from "@/lib/server/signed-json";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
+  if (!isAuthOtpEnabled() && !isPhoneOtpEnabled()) {
+    return Response.json(
+      { error: "OTP is turned off. Create an account with email and password." },
+      { status: 404 },
+    );
+  }
   if (!canSignServerPayload()) {
     return Response.json(
       { error: "OTP is not configured. Set ADMIN_SESSION_SECRET or OTP_SECRET." },

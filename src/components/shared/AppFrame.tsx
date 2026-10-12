@@ -78,22 +78,22 @@ export function AppFrame({
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 pb-24 md:pb-10">{children}</main>
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-elev md:hidden" aria-label="Mobile">
+      <main className="mx-auto w-full max-w-6xl px-4 py-5 pb-28 md:pb-10">{children}</main>
+      <nav className="mobile-tabbar md:hidden" aria-label="Mobile">
         <ul className="grid" style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}>
           {nav.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+            const active = item.href === homeHref ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   prefetch={false}
-                  className={`flex flex-col items-center gap-1 py-3 text-xs no-underline ${
+                  className={`flex flex-col items-center justify-center gap-1 px-1 text-[11px] font-semibold no-underline ${
                     active ? "text-teal" : "text-muted"
                   }`}
                 >
-                  <Icon size={20} />
+                  <Icon size={22} />
                   {item.label}
                 </Link>
               </li>

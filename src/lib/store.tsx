@@ -13,7 +13,10 @@ import {
   type ReactNode,
 } from "react";
 import { decryptJson } from "./crypto";
-import { seedState } from "./seed";
+import { liveState } from "./seed";
+import { loadAccountBundle, saveAccountBundle } from "./account-profile";
+import { isFirebaseConfigured } from "./firebase-config";
+import { normalizeServices } from "./services";
 import type {
   AppNotification,
   AppState,
@@ -28,31 +31,25 @@ import type {
   Role,
   User,
 } from "./types";
-import { DEFAULT_HOURS } from "./types";
-import type { DailyLog, Prescription, Review } from "./care-types";
-import { clearFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
-import { comparePassword, hashPassword, hasLocalCredential, isPasswordHashed, needsBcryptUpgrade, stripUserSecrets } from "./password";
+import { DEFAULT_HOURS, type WeekHours } from "./types";
+import type { ClinicLocation, DailyLog, DoctorPricing, PhysioService, Prescription, Review } from "./care-types";
+import { explainDoctorSaveError } from "./doctor-save-error";
+import { withTimeout } from "./with-timeout";
+import { clearFirebaseAuth, getFirebaseAuth, syncFirebaseAuth } from "./firebase-auth-session";
+import { onAuthStateChanged } from "firebase/auth";
+import { hashPassword, isPasswordHashed, stripUserSecrets } from "./password";
 import { persistPaidBooking, persistPaymentRecord } from "./persist-booking";
 import { persistProgram } from "./persist-program";
 import { notifyFcm } from "./notifications";
-import { revokeAdminSession } from "./admin-actions";
 import { clearAuthCookies, setAuthCookies } from "./auth-session";
+import { ensureUserUhid } from "./uhid";
 
 const STORAGE_KEY = "physioflow.v4";
 const LEGACY_KEY = "physioflow.v3";
 const SESSION_KEY = "physioflow.session";
 
-function withSeedCredentials(user: User): User {
-  if (hasLocalCredential(user)) return user;
-  const seed = seedState.users.find(
-    (s) => s.id === user.id || s.email.toLowerCase() === user.email.toLowerCase(),
-  );
-  if (!seed || !hasLocalCredential(seed)) return user;
-  return {
-    ...user,
-    password: seed.password,
-    passwordHash: seed.passwordHash,
-  };
+function isDemoEmail(email: string) {
+  return email.trim().toLowerCase().endsWith("@demo.physio");
 }
 
 function readVaultSync(): AppState | null {
@@ -64,7 +61,7 @@ function readVaultSync(): AppState | null {
       if (sessionId) parsed.currentUserId = sessionId;
       return parsed;
     }
-    if (sessionId) return { ...seedState, currentUserId: sessionId };
+    if (sessionId) return { ...liveState, currentUserId: sessionId };
   } catch {
     /* keep seed */
   }
@@ -96,7 +93,14 @@ type Action =
       clinicId?: string;
       bio?: string;
       qualifications?: string;
+      userId?: string;
+      services?: PhysioService[];
+      pricing?: DoctorPricing;
+      availability?: WeekHours;
+      clinicLocation?: ClinicLocation;
     }
+  | { type: "setUhid"; userId: string; uhid: string }
+  | { type: "adoptAccount"; user: User; profile?: PatientProfile; doctor?: DoctorProfile }
   | { type: "updateProfile"; profile: PatientProfile }
   | { type: "updateDoctor"; doctor: DoctorProfile }
   | { type: "assignProgram"; program: Program }
@@ -138,6 +142,8 @@ type Action =
       finalPrice?: number;
       clinicAddress?: string;
       meetingLink?: string;
+      serviceId?: string;
+      serviceName?: string;
     }
   | {
       type: "addDoctor";
@@ -169,54 +175,42 @@ function uid(prefix: string) {
 }
 
 function normalizeState(incoming: AppState): AppState {
-  const doctors = (incoming.doctors ?? seedState.doctors).map((d) => {
-    const seeded = seedState.doctors.find((s) => s.userId === d.userId);
-    return {
-      ...d,
-      availability: d.availability ?? DEFAULT_HOURS,
-      isVerified: d.isVerified ?? seeded?.isVerified,
-      location: d.location ?? seeded?.location,
-      clinicLocation: d.clinicLocation ?? seeded?.clinicLocation ?? (d.location
-        ? { latitude: d.location.lat, longitude: d.location.lng, address: d.location.address }
-        : seeded?.location
-          ? { latitude: seeded.location.lat, longitude: seeded.location.lng, address: seeded.location.address }
+  const users: User[] = (incoming.users ?? [])
+    .filter((user) => !isDemoEmail(user.email))
+    .map((user) => ({ ...user, password: "" }));
+  const userIds = new Set(users.map((user) => user.id));
+  const doctors = (incoming.doctors ?? [])
+    .filter((doctor) => userIds.has(doctor.userId))
+    .map((doctor) => ({
+      ...doctor,
+      availability: doctor.availability ?? DEFAULT_HOURS,
+      services: normalizeServices(doctor.services),
+      clinicLocation:
+        doctor.clinicLocation ??
+        (doctor.location
+          ? { latitude: doctor.location.lat, longitude: doctor.location.lng, address: doctor.location.address }
           : undefined),
-      photoUrl: d.photoUrl ?? seeded?.photoUrl,
-      consultationFee: d.consultationFee ?? seeded?.consultationFee,
-      pricing: d.pricing ?? seeded?.pricing,
-    };
-  });
-  const users: User[] = [...(incoming.users ?? [])].map((u) => {
-    const doctor = doctors.find((d) => d.userId === u.id);
-    return {
-      ...withSeedCredentials(u),
-      profileImageUrl: u.profileImageUrl || doctor?.photoUrl,
-    };
-  });
-  for (const demo of seedState.users) {
-    if (!users.some((u) => u.id === demo.id || u.email.toLowerCase() === demo.email.toLowerCase())) {
-      users.push(demo);
-    }
-  }
-  const profiles = [...(incoming.profiles ?? [])];
-  for (const demo of seedState.profiles) {
-    if (!profiles.some((p) => p.userId === demo.userId)) profiles.push(demo);
-  }
+    }));
+  const profiles = (incoming.profiles ?? []).filter((profile) => userIds.has(profile.userId));
   const current =
-    incoming.currentUserId && users.some((u) => u.id === incoming.currentUserId)
-      ? incoming.currentUserId
-      : null;
+    incoming.currentUserId && userIds.has(incoming.currentUserId) ? incoming.currentUserId : null;
   return {
-    ...seedState,
+    ...liveState,
     ...incoming,
+    exercises: incoming.exercises?.length ? incoming.exercises : liveState.exercises,
     users,
     profiles,
     doctors,
-    bookings: incoming.bookings ?? seedState.bookings,
-    consults: incoming.consults ?? seedState.consults,
-    reviews: incoming.reviews ?? seedState.reviews ?? [],
-    prescriptions: incoming.prescriptions ?? seedState.prescriptions ?? [],
-    dailyLogs: incoming.dailyLogs ?? seedState.dailyLogs ?? [],
+    programs: (incoming.programs ?? []).filter((program) => userIds.has(program.patientId) || userIds.has(program.physioId)),
+    consults: (incoming.consults ?? []).filter((consult) => userIds.has(consult.patientId) || userIds.has(consult.physioId)),
+    bookings: (incoming.bookings ?? []).filter((booking) => !isDemoEmail(booking.patientEmail)),
+    notifications: (incoming.notifications ?? []).filter((note) => userIds.has(note.userId)),
+    reviews: incoming.reviews ?? [],
+    prescriptions: incoming.prescriptions ?? [],
+    dailyLogs: incoming.dailyLogs ?? [],
+    completions: incoming.completions ?? [],
+    painLogs: incoming.painLogs ?? [],
+    audit: incoming.audit ?? [],
     currentUserId: current,
   };
 }
@@ -226,18 +220,9 @@ function reducer(state: AppState, action: Action): AppState {
     case "hydrate":
       return normalizeState(action.state);
     case "login": {
-      let users = state.users;
-      let profiles = state.profiles;
-      let user = users.find((u) => u.id === action.userId);
-      if (!user) {
-        user = seedState.users.find((u) => u.id === action.userId);
-        if (user) {
-          const seeded = user;
-          users = [...users, seeded];
-          const extra = seedState.profiles.filter((p) => p.userId === seeded.id);
-          profiles = [...profiles, ...extra.filter((p) => !profiles.some((x) => x.userId === p.userId))];
-        }
-      }
+      const users = state.users;
+      const profiles = state.profiles;
+      const user = users.find((u) => u.id === action.userId);
       if (!user) return state;
       return {
         ...state,
@@ -270,11 +255,38 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case "logout":
       return { ...state, currentUserId: null };
+    case "adoptAccount": {
+      const user = { ...action.user, password: "", passwordHash: "" };
+      const users = state.users.some((existing) => existing.id === user.id || existing.email.toLowerCase() === user.email.toLowerCase())
+        ? state.users.map((existing) => (existing.email.toLowerCase() === user.email.toLowerCase() ? user : existing))
+        : [...state.users, user];
+      const profiles = action.profile
+        ? state.profiles.some((profile) => profile.userId === action.profile!.userId)
+          ? state.profiles.map((profile) => (profile.userId === action.profile!.userId ? action.profile! : profile))
+          : [...state.profiles, action.profile]
+        : state.profiles;
+      const doctors = action.doctor
+        ? state.doctors.some((doctor) => doctor.userId === action.doctor!.userId)
+          ? state.doctors.map((doctor) => (doctor.userId === action.doctor!.userId ? { ...doctor, ...action.doctor } : doctor))
+          : [...state.doctors, action.doctor]
+        : state.doctors;
+      return { ...state, users, profiles, doctors, currentUserId: user.id };
+    }
+    case "setUhid":
+      return {
+        ...state,
+        users: state.users.map((user) =>
+          user.id === action.userId && !user.uhid ? { ...user, uhid: action.uhid } : user,
+        ),
+        doctors: (state.doctors ?? []).map((doctor) =>
+          doctor.userId === action.userId && !doctor.uhid ? { ...doctor, uhid: action.uhid } : doctor,
+        ),
+      };
     case "register": {
       if (state.users.some((u) => u.email.toLowerCase() === action.email.toLowerCase())) {
         return state;
       }
-      const id = uid(action.role);
+      const id = action.userId || uid(action.role);
       const user = {
         id,
         name: action.name,
@@ -320,7 +332,12 @@ function reducer(state: AppState, action: Action): AppState {
                 phone: action.phone ?? "",
                 bio: action.bio ?? "",
                 qualifications: action.qualifications,
-                availability: DEFAULT_HOURS,
+                availability: action.availability ?? DEFAULT_HOURS,
+                services: action.services ?? [],
+                pricing: action.pricing,
+                clinicLocation: action.clinicLocation,
+                consultationFee: action.pricing?.onlineFee,
+                isVerified: false,
               },
             ]
           : state.doctors;
@@ -565,6 +582,8 @@ function reducer(state: AppState, action: Action): AppState {
         mode: action.mode,
         finalPrice: action.finalPrice ?? action.consultationFee ?? action.amount,
         clinicAddress: action.clinicAddress,
+        serviceId: action.serviceId,
+        serviceName: action.serviceName,
         meetingLink: action.mode === "online" ? `/consult/${consultId}` : action.meetingLink,
       };
       const clinicId = state.doctors.find((d) => d.userId === action.physioId)?.clinicId ?? action.physioId;
@@ -864,6 +883,10 @@ interface StoreValue {
     clinicId?: string;
     bio?: string;
     qualifications?: string;
+    services?: PhysioService[];
+    pricing?: DoctorPricing;
+    availability?: WeekHours;
+    clinicLocation?: ClinicLocation;
   }) => Promise<boolean>;
   updateProfile: (profile: PatientProfile) => void;
   updateDoctor: (doctor: DoctorProfile) => void;
@@ -909,6 +932,8 @@ interface StoreValue {
     finalPrice?: number;
     clinicAddress?: string;
     meetingLink?: string;
+    serviceId?: string;
+    serviceName?: string;
   }) => string | false;
   addDoctor: (input: {
     name: string;
@@ -939,10 +964,35 @@ interface StoreValue {
 const StoreContext = createContext<StoreValue | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, seedState);
+  const [state, dispatch] = useReducer(reducer, liveState);
   const [hydrated, setHydrated] = useState(false);
   const [secretsReady, setSecretsReady] = useState(false);
   const sessionLock = useRef<string | null>(null);
+
+  const currentUhid = state.users.find((user) => user.id === state.currentUserId)?.uhid;
+
+  useEffect(() => {
+    if (!hydrated || !state.currentUserId || currentUhid) return;
+    const userId = state.currentUserId;
+    let cancelled = false;
+    void (async () => {
+      const auth = getFirebaseAuth();
+      if (auth) {
+        await new Promise<void>((resolve) => {
+          const unsubscribe = onAuthStateChanged(auth, () => {
+            unsubscribe();
+            resolve();
+          });
+        });
+      }
+      if (cancelled) return;
+      const uhid = await ensureUserUhid(userId);
+      if (!cancelled && uhid) dispatch({ type: "setUhid", userId, uhid });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, state.currentUserId, currentUhid]);
 
   useLayoutEffect(() => {
     const cached = readVaultSync();
@@ -1047,47 +1097,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase();
-    const candidates = [...state.users, ...seedState.users];
-    const matches = candidates.filter((u) => u.email.toLowerCase() === normalizedEmail);
-    // Prefer a match that still has a usable credential (passwordHash or plain password).
-    // Persisted vaults used to strip plaintext before hashing, which left demo users
-    // unable to sign in even though seed credentials were still available.
-    const found = matches.find((u) => hasLocalCredential(u)) ?? matches[0] ?? undefined;
+    if (!isFirebaseConfigured()) return false;
+    const remote = await syncFirebaseAuth(normalizedEmail, password, { createIfMissing: false });
+    if (!remote) return false;
 
-    const passwordOk = found
-      ? await comparePassword(password, found.passwordHash || found.password)
-      : false;
-    if (found && passwordOk) {
-      // Plaintext only in-memory for Firebase Auth — never persisted.
-      await syncFirebaseAuth(found.email, password, { createIfMissing: true });
-      sessionLock.current = found.id;
-      try {
-        localStorage.setItem(SESSION_KEY, found.id);
-        setAuthCookies(found.role, found.id);
-      } catch {
-        /* ignore */
+    let found = state.users.find((user) => user.id === remote.uid || user.email.toLowerCase() === normalizedEmail);
+    let loadedRemote = false;
+    if (!found || found.id !== remote.uid) {
+      const bundle = await loadAccountBundle(remote.uid);
+      loadedRemote = true;
+      if (bundle) {
+        dispatch({ type: "adoptAccount", user: bundle.user, profile: bundle.profile, doctor: bundle.doctor });
+        found = bundle.user;
       }
-      dispatch({ type: "login", userId: found.id });
-      // Migrate plaintext / legacy PBKDF2 (or hash parked in `password`) → bcrypt passwordHash.
-      if (needsBcryptUpgrade(found)) {
-        dispatch({ type: "setPasswordHash", userId: found.id, passwordHash: await hashPassword(password) });
-      }
-      return found;
     }
-    const remote = await syncFirebaseAuth(email, password, { createIfMissing: false });
-    if (remote && found) {
-      sessionLock.current = found.id;
+    if (found && !loadedRemote && !found.uhid) {
       try {
-        localStorage.setItem(SESSION_KEY, found.id);
-        setAuthCookies(found.role, found.id);
+        const uhid = await ensureUserUhid(remote.uid);
+        if (uhid) {
+          dispatch({ type: "setUhid", userId: remote.uid, uhid });
+          found = { ...found, uhid };
+        }
       } catch {
-        /* ignore */
+        /* Existing login still opens. The next profile load retries the hospital ID. */
       }
-      dispatch({ type: "login", userId: found.id });
-      dispatch({ type: "setPasswordHash", userId: found.id, passwordHash: await hashPassword(password) });
-      return found;
     }
-    return false;
+    if (!found) return false;
+
+    sessionLock.current = found.id;
+    try {
+      localStorage.setItem(SESSION_KEY, found.id);
+      setAuthCookies(found.role, found.id);
+    } catch {
+      /* ignore */
+    }
+    dispatch({ type: "login", userId: found.id });
+    return found;
   }, [state.users]);
 
   const logout = useCallback(() => {
@@ -1098,18 +1143,91 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    void revokeAdminSession();
     void clearFirebaseAuth();
     dispatch({ type: "logout" });
   }, []);
   const register = useCallback(async (input: Parameters<StoreValue["register"]>[0]) => {
-    if (state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
-      return false;
+    const email = input.email.trim().toLowerCase();
+    const existing = state.users.find((u) => u.email.toLowerCase() === email);
+    if (existing && existing.role !== input.role) return false;
+    if (!isFirebaseConfigured()) return false;
+    const remote = await syncFirebaseAuth(email, input.password, { createIfMissing: true });
+    if (!remote) return false;
+    const passwordHash = await withTimeout(hashPassword(input.password), 20_000, "Securing your password");
+    const user: User = {
+      id: remote.uid,
+      name: input.name.trim(),
+      email,
+      password: "",
+      passwordHash,
+      role: input.role,
+      phone: input.phone,
+      consentHipaa: true,
+      consentGdpr: true,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+    };
+    const profile: PatientProfile | undefined =
+      input.role === "patient"
+        ? {
+            userId: remote.uid,
+            condition: input.condition ?? "back",
+            goal: input.goal ?? "Feel better day to day",
+            diagnosis: input.medicalHistory || "Self-registered",
+            painBaseline: 4,
+            dateOfBirth: input.dateOfBirth ?? "",
+            assignedPhysioId: "",
+            phone: input.phone,
+            address: input.address,
+            emergencyName: input.emergencyName,
+            emergencyPhone: input.emergencyPhone,
+            medicalHistory: input.medicalHistory,
+          }
+        : undefined;
+    const doctor: DoctorProfile | undefined =
+      input.role === "physio"
+        ? {
+            userId: remote.uid,
+            clinicId: input.clinicId?.trim() || `DOC-${remote.uid.slice(0, 4).toUpperCase()}`,
+            specialty: input.specialty ?? "General physiotherapy",
+            phone: input.phone ?? "",
+            bio: input.bio ?? "",
+            qualifications: input.qualifications,
+            availability: input.availability ?? DEFAULT_HOURS,
+            services: input.services ?? [],
+            pricing: input.pricing,
+            clinicLocation: input.clinicLocation,
+            consultationFee: input.pricing?.onlineFee,
+            isVerified: false,
+          }
+        : undefined;
+    if (!existing) {
+      dispatch({ type: "register", ...input, email, userId: remote.uid, password: "", passwordHash });
+    } else if (doctor) {
+      dispatch({ type: "updateDoctor", doctor });
+      if (existing.id !== remote.uid) {
+        dispatch({ type: "adoptAccount", user, doctor });
+      }
     }
-    const passwordHash = await hashPassword(input.password);
-    await syncFirebaseAuth(input.email, input.password, { createIfMissing: true });
-    dispatch({ type: "register", ...input, password: "", passwordHash });
-    sessionLock.current = "pending";
+    sessionLock.current = remote.uid;
+    try {
+      localStorage.setItem(SESSION_KEY, remote.uid);
+      setAuthCookies(input.role, remote.uid);
+    } catch {
+      /* ignore */
+    }
+    try {
+      const uhid = await saveAccountBundle(user, { profile, doctor });
+      if (uhid) dispatch({ type: "setUhid", userId: remote.uid, uhid });
+    } catch (err) {
+      const error = new Error(
+        explainDoctorSaveError(err, {
+          bucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        }),
+      );
+      (error as Error & { accountReady?: boolean }).accountReady = true;
+      throw error;
+    }
     return true;
   }, [state.users]);
   const updateProfile = useCallback(
@@ -1204,6 +1322,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         finalPrice: input.finalPrice,
         clinicAddress: input.clinicAddress,
         meetingLink: input.meetingLink,
+        serviceId: input.serviceId,
+        serviceName: input.serviceName,
       };
       void persistPaidBooking(booking, {
         patientEmail: input.patientEmail,
@@ -1350,7 +1470,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const resetDemo = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_KEY);
-    dispatch({ type: "hydrate", state: { ...seedState, currentUserId: null } });
+    dispatch({ type: "hydrate", state: { ...liveState, currentUserId: null } });
   }, []);
 
   const value = useMemo<StoreValue>(

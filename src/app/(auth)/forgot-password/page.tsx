@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
         <LocaleSwitcher />
         <form onSubmit={(e) => void onSubmit(e)} className="card space-y-4 p-6">
           <h1 className="text-2xl font-semibold">Reset your password</h1>
-          <p className="text-muted">We will email a Firebase reset link to this address.</p>
+          <p className="text-muted">We will email a reset link to this address.</p>
           {sent ? (
             <p>Check {email} for the reset link. Then sign in with the new password.</p>
           ) : (

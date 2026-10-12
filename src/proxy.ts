@@ -1,30 +1,27 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ADMIN_COOKIE, adminEnv, isAdminPath, readAdminToken } from "@/lib/admin-session";
-import { ROLE_COOKIE, UID_COOKIE } from "@/lib/auth-session";
+import { ROLE_COOKIE } from "@/lib/auth-session";
 import { isDoctorOnboardingPath, isDoctorPath, isPatientPath } from "@/lib/paths";
 
 async function guardAdmin(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (!isAdminPath(pathname)) return null;
+  if (!isAdminPath(pathname) || pathname === "/admin/login") return null;
 
   const env = adminEnv();
   if (!env.ready) {
-    return NextResponse.redirect(new URL("/unauthorized", request.url));
-  }
-
-  const role = request.cookies.get(ROLE_COOKIE)?.value;
-  const uid = request.cookies.get(UID_COOKIE)?.value;
-  if (!role && !uid) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    url.pathname = "/admin/login";
+    url.searchParams.set("error", "env");
     return NextResponse.redirect(url);
   }
 
   const session = await readAdminToken(request.cookies.get(ADMIN_COOKIE)?.value);
   if (!session) {
-    return NextResponse.redirect(new URL("/unauthorized", request.url));
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/login";
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
   }
 
   return NextResponse.next();

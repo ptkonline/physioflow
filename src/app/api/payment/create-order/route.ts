@@ -1,10 +1,31 @@
+import type { AppointmentDraft } from "@/lib/pricing";
 import { parseDraft } from "@/lib/server/payment-notify";
 import { persistPaymentToken, savePaymentOrder } from "@/lib/server/payment-orders";
 import { createRazorpayOrder, isRazorpayConfigured, razorpayKeyId } from "@/lib/server/razorpay";
 import { canSignServerPayload } from "@/lib/server/signed-json";
 import { getAdminDb } from "@/lib/server/firebase-admin";
-import { quoteFees } from "@/lib/pricing";
+import { quoteFees, validFee } from "@/lib/pricing";
 import { NextRequest } from "next/server";
+
+async function trustedServicePrice(draft: AppointmentDraft) {
+  const clientPrice = validFee(draft.servicePrice) ? Math.round(draft.servicePrice) : undefined;
+  if (!draft.serviceId) return clientPrice;
+  const db = await getAdminDb();
+  if (!db) return clientPrice;
+  try {
+    const admin = await import("firebase-admin");
+    const snap = await admin.firestore().collection("doctors_public").doc(draft.doctorId).get();
+    const services = snap.data()?.services;
+    if (Array.isArray(services)) {
+      const match = services.find((row) => row && typeof row === "object" && (row as { id?: string }).id === draft.serviceId);
+      const price = Number((match as { price?: number } | undefined)?.price);
+      if (validFee(price)) return Math.round(price);
+    }
+  } catch {
+    /* fall through to the client price when Admin SDK cannot read the catalog */
+  }
+  return clientPrice;
+}
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -19,9 +40,12 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Missing doctor, patient, or appointment time." }, { status: 400 });
   }
 
+  const trustedPrice = await trustedServicePrice(draft);
   const quote = quoteFees(draft.doctorId, undefined, draft.mode ?? "online", {
     onlineFee: draft.onlineFee,
     offlineFee: draft.offlineFee,
+    servicePrice: trustedPrice,
+    serviceName: draft.serviceName,
   });
   const receipt = `pf_${Date.now().toString(36)}`.slice(0, 40);
   const durable = canSignServerPayload() || Boolean(await getAdminDb());

@@ -31,11 +31,8 @@ export default function HomePage() {
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Logo className="text-xl" />
         <div className="flex flex-wrap gap-2">
-          <Link href="/login?role=patient" className="btn btn-ghost">
-            Patient sign in
-          </Link>
-          <Link href="/login?role=doctor" className="btn btn-ghost">
-            Doctor sign in
+          <Link href="/login" className="btn btn-ghost">
+            Sign in
           </Link>
           <Link href="/register" className="btn btn-primary">
             Get started
@@ -53,14 +50,11 @@ export default function HomePage() {
               Create your own profile, see live doctor availability, and book. The visit appears on the doctor’s dashboard at once.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/register" className="btn btn-primary">
+              <Link href="/register" className="btn btn-primary w-full sm:w-auto">
                 Create a free account
               </Link>
-              <Link href="/login?role=patient" className="btn btn-ghost">
-                Patient demo
-              </Link>
-              <Link href="/login?role=doctor" className="btn btn-ghost">
-                Doctor demo
+              <Link href="/login" className="btn btn-ghost w-full sm:w-auto">
+                I already have an account
               </Link>
             </div>
           </div>
@@ -77,8 +71,8 @@ export default function HomePage() {
                 <p className="text-sm text-muted">Video exercises</p>
               </div>
               <div>
-                <p className="text-2xl font-semibold">2</p>
-                <p className="text-sm text-muted">Demo roles</p>
+                <p className="text-2xl font-semibold">1</p>
+                <p className="text-sm text-muted">Password to start</p>
               </div>
               <div>
                 <p className="text-2xl font-semibold">0–10</p>
@@ -97,9 +91,7 @@ export default function HomePage() {
           ))}
         </section>
         <p className="mt-10 text-center text-sm text-muted">
-          Demo: <strong>maya@demo.physio</strong> (patient),{" "}
-          <strong>james@demo.physio</strong> / <strong>aisha@demo.physio</strong> (doctors). Password{" "}
-          <strong>demo123</strong>.
+          Sign in with the email and password you created. No verification code.
         </p>
       </main>
     </div>

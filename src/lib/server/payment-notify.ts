@@ -119,5 +119,8 @@ export function parseDraft(body: Record<string, unknown>): AppointmentDraft | nu
     mode: body.mode === "offline" ? "offline" : "online",
     onlineFee: Number(body.onlineFee) || undefined,
     offlineFee: Number(body.offlineFee) || undefined,
+    serviceId: String(body.serviceId ?? "").slice(0, 80) || undefined,
+    serviceName: String(body.serviceName ?? "").slice(0, 80) || undefined,
+    servicePrice: Number(body.servicePrice) || undefined,
   };
 }

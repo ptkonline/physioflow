@@ -2,75 +2,47 @@
 
 import { DoctorRegisterForm } from "@/components/DoctorRegisterForm";
 import { Logo } from "@/components/Logo";
-import { CONDITIONS, GOALS } from "@/lib/seed";
+import { StepScreen } from "@/components/flow/StepScreen";
+import { isFirebaseConfigured } from "@/lib/firebase-config";
 import { homePath } from "@/lib/paths";
+import { CONDITIONS, GOALS } from "@/lib/seed";
 import { useStore } from "@/lib/store";
 import type { Condition, Role } from "@/lib/types";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useRef, useState } from "react";
+import { useState } from "react";
 
 export default function RegisterPage() {
+  const t = useTranslations("auth");
+  const tc = useTranslations("common");
   const { register } = useStore();
   const router = useRouter();
   const [role, setRole] = useState<Role>("patient");
+  const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [condition, setCondition] = useState<Condition>("knee");
   const [goal, setGoal] = useState(GOALS[0]);
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [address, setAddress] = useState("");
-  const [emergencyName, setEmergencyName] = useState("");
-  const [emergencyPhone, setEmergencyPhone] = useState("");
-  const [medicalHistory, setMedicalHistory] = useState("");
   const [hipaa, setHipaa] = useState(false);
   const [gdpr, setGdpr] = useState(false);
-  const [otp, setOtp] = useState("");
-  const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const challengeRef = useRef("");
 
-  async function sendOtp() {
-    const res = await fetch("/api/auth/otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, purpose: "register" }),
-    });
-    const body = (await res.json()) as { error?: string; challengeToken?: string };
-    if (!res.ok || !body.challengeToken) throw new Error(body.error || "Could not send the verification code.");
-    challengeRef.current = body.challengeToken;
-    setAwaitingOtp(true);
-  }
-
-  async function verifyOtp() {
-    const code = otp.replace(/\D/g, "");
-    if (code.length !== 6) throw new Error("Enter the 6-digit code from your email.");
-    const res = await fetch("/api/auth/otp/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code, challengeToken: challengeRef.current }),
-    });
-    const body = (await res.json()) as { error?: string; ok?: boolean };
-    if (!res.ok || !body.ok) throw new Error(body.error || "That code is not valid.");
-  }
-
-  async function onPatientSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function createPatient() {
     if (!hipaa || !gdpr) {
-      setError("Please accept both privacy statements to continue.");
+      setError(t("consentRequired"));
+      return;
+    }
+    if (!isFirebaseConfigured()) {
+      setError(t("firebaseRequired"));
       return;
     }
     setBusy(true);
     setError("");
     try {
-      if (!awaitingOtp) {
-        await sendOtp();
-        return;
-      }
-      await verifyOtp();
       const ok = await register({
         name,
         email,
@@ -79,44 +51,40 @@ export default function RegisterPage() {
         phone,
         condition,
         goal,
-        dateOfBirth,
-        address,
-        emergencyName,
-        emergencyPhone,
-        medicalHistory,
       });
       if (!ok) {
-        setError("That email is already in use.");
+        setError(t("emailTaken"));
         return;
       }
       router.replace(homePath("patient"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the profile.");
+      setError(err instanceof Error ? err.message : t("createFailed"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <div className="mx-auto max-w-md px-4 py-8">
       <Link href="/" className="no-underline">
         <Logo className="text-xl" />
       </Link>
-      <div className="card mt-6 space-y-4 p-6">
-        <h1 className="text-2xl font-semibold">Create your profile</h1>
-        <p className="text-muted">
-          Patients can start immediately. Doctors complete a verification form — documents go to review before the
-          portal opens.
-        </p>
+      <div className="card mt-5 space-y-4 p-5">
+        <h1 className="text-2xl font-semibold">{t("createTitle")}</h1>
+        <p className="text-muted">{t("passwordOnly")}</p>
         <div className="grid grid-cols-2 gap-2">
-          {(["patient", "physio"] as Role[]).map((r) => (
+          {(["patient", "physio"] as Role[]).map((value) => (
             <button
-              key={r}
+              key={value}
               type="button"
-              onClick={() => setRole(r)}
-              className={`btn ${role === r ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => {
+                setRole(value);
+                setStep(1);
+                setError("");
+              }}
+              className={`btn ${role === value ? "btn-primary" : "btn-ghost"}`}
             >
-              {r === "patient" ? "Patient portal" : "Doctor portal"}
+              {value === "patient" ? t("patientRole") : t("doctorRole")}
             </button>
           ))}
         </div>
@@ -124,117 +92,84 @@ export default function RegisterPage() {
         {role === "physio" ? (
           <DoctorRegisterForm />
         ) : (
-          <form onSubmit={onPatientSubmit} className="space-y-4">
-            <label className="block space-y-1">
-              <span>Full name</span>
-              <input className="field" value={name} onChange={(e) => setName(e.target.value)} required />
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block space-y-1">
-                <span>Email</span>
-                <input className="field" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required suppressHydrationWarning />
-              </label>
-              <label className="block space-y-1">
-                <span>Phone</span>
-                <input className="field" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
-              </label>
-            </div>
-            <label className="block space-y-1">
-              <span>Password</span>
-              <input
-                className="field"
-                type="password"
-                autoComplete="new-password"
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                suppressHydrationWarning
-              />
-            </label>
-            <label className="block space-y-1">
-              <span>Date of birth</span>
-              <input className="field" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
-            </label>
-            <label className="block space-y-1">
-              <span>Home address</span>
-              <input className="field" value={address} onChange={(e) => setAddress(e.target.value)} required />
-            </label>
-            <label className="block space-y-1">
-              <span>Main condition</span>
-              <select className="field" value={condition} onChange={(e) => setCondition(e.target.value as Condition)}>
-                {CONDITIONS.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block space-y-1">
-              <span>Goal</span>
-              <select className="field" value={goal} onChange={(e) => setGoal(e.target.value)}>
-                {GOALS.map((g) => (
-                  <option key={g}>{g}</option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block space-y-1">
-                <span>Emergency contact name</span>
-                <input className="field" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} required />
-              </label>
-              <label className="block space-y-1">
-                <span>Emergency phone</span>
-                <input className="field" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} required />
-              </label>
-            </div>
-            <label className="block space-y-1">
-              <span>Medical history / notes</span>
-              <textarea className="field min-h-24" value={medicalHistory} onChange={(e) => setMedicalHistory(e.target.value)} />
-            </label>
-            <label className="flex items-start gap-3">
-              <input type="checkbox" className="mt-1 h-5 w-5" checked={hipaa} onChange={(e) => setHipaa(e.target.checked)} />
-              <span>I agree to the handling of health information for care (HIPAA-minded consent).</span>
-            </label>
-            <label className="flex items-start gap-3">
-              <input type="checkbox" className="mt-1 h-5 w-5" checked={gdpr} onChange={(e) => setGdpr(e.target.checked)} />
-              <span>I agree to GDPR-style processing and understand I can export or delete my data.</span>
-            </label>
-            {awaitingOtp && (
-              <label className="block space-y-1">
-                <span>Email verification code</span>
-                <p className="text-sm text-muted">Enter the 6-digit code we emailed you. It lasts 30 minutes.</p>
-                <input
-                  className="field tracking-[0.3em]"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="6 digits"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  required
-                />
-                <button
-                  type="button"
-                  className="text-sm underline"
-                  onClick={() => {
-                    challengeRef.current = "";
-                    setOtp("");
-                    void sendOtp().catch((err) => setError(err instanceof Error ? err.message : "Could not send the code."));
-                  }}
-                >
-                  Resend code
-                </button>
-              </label>
+          <>
+            {step === 1 && (
+              <StepScreen
+                step={1}
+                total={2}
+                title={t("accountStep")}
+                hint={t("accountHint")}
+                primaryLabel={tc("continue")}
+                primaryDisabled={!name.trim() || !email.includes("@") || password.length < 6}
+                onPrimary={() => {
+                  setError("");
+                  setStep(2);
+                }}
+              >
+                <label className="block space-y-1">
+                  <span>{t("fullName")}</span>
+                  <input className="field" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} required />
+                </label>
+                <label className="block space-y-1">
+                  <span>{t("email")}</span>
+                  <input className="field" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                </label>
+                <label className="block space-y-1">
+                  <span>{t("password")}</span>
+                  <input className="field" type="password" autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
+                </label>
+              </StepScreen>
+            )}
+            {step === 2 && (
+              <StepScreen
+                step={2}
+                total={2}
+                title={t("aboutStep")}
+                hint={t("aboutHint")}
+                backLabel={t("back")}
+                onBack={() => setStep(1)}
+                primaryLabel={t("createAccount")}
+                busy={busy}
+                primaryDisabled={!phone.trim()}
+                onPrimary={() => void createPatient()}
+              >
+                <label className="block space-y-1">
+                  <span>{t("phone")}</span>
+                  <input className="field" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                </label>
+                <label className="block space-y-1">
+                  <span>{t("condition")}</span>
+                  <select className="field" value={condition} onChange={(e) => setCondition(e.target.value as Condition)}>
+                    {CONDITIONS.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block space-y-1">
+                  <span>{t("goal")}</span>
+                  <select className="field" value={goal} onChange={(e) => setGoal(e.target.value)}>
+                    {GOALS.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" className="mt-1 h-5 w-5" checked={hipaa} onChange={(e) => setHipaa(e.target.checked)} />
+                  <span>{t("hipaa")}</span>
+                </label>
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" className="mt-1 h-5 w-5" checked={gdpr} onChange={(e) => setGdpr(e.target.checked)} />
+                  <span>{t("gdpr")}</span>
+                </label>
+              </StepScreen>
             )}
             {error && <p className="text-rose">{error}</p>}
-            <button className="btn btn-primary w-full" type="submit" disabled={busy}>
-              {busy ? "Please wait…" : awaitingOtp ? "Verify and create profile" : "Send verification code"}
-            </button>
-          </form>
+          </>
         )}
         <p className="text-center text-muted">
-          Already registered? <Link href="/login">Sign in</Link>
+          {t("haveAccount")} <Link href="/login">{tc("signIn")}</Link>
         </p>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { AppFrame } from "@/components/shared/AppFrame";
 import { useCurrentUser, useStore } from "@/lib/store";
-import { BookOpen, Calendar, FileText, Home, LineChart, Users } from "lucide-react";
+import { Calendar, Home, Stethoscope, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -15,10 +15,8 @@ export function DoctorShell({ children }: { children: ReactNode }) {
   const nav = [
     { href: "/doctor/dashboard", label: t("home"), icon: Home },
     { href: "/doctor/appointments", label: t("appointments"), icon: Calendar },
-    { href: "/doctor/prescriptions", label: t("prescriptions"), icon: FileText },
+    { href: "/doctor/services", label: t("services"), icon: Stethoscope },
     { href: "/doctor/patients", label: t("patients"), icon: Users },
-    { href: "/doctor/availability", label: t("hours"), icon: LineChart },
-    { href: "/doctor/library", label: t("videos"), icon: BookOpen },
   ];
 
   return (

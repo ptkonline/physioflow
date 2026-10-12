@@ -6,13 +6,16 @@ import { DoctorAvatar } from "@/components/shared/DoctorAvatar";
 import { VerifiedBadge } from "@/components/shared/VerifiedBadge";
 import { openSlots } from "@/lib/availability";
 import { calculateDistance, clinicPoint, formatDistanceKm, readPatientCoords, savePatientCoords } from "@/lib/geo";
-import { doctorPricing, formatInr } from "@/lib/pricing";
+import { formatInr } from "@/lib/pricing";
+import { bookableServices, lowestServicePrice } from "@/lib/services";
 import { averageRating } from "@/lib/reviews";
 import { useStore } from "@/lib/store";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 export default function PatientDoctors() {
+  const t = useTranslations("booking");
   const { state } = useStore();
   const [here, setHere] = useState<{ latitude: number; longitude: number } | null>(null);
   const [geoNote, setGeoNote] = useState("Allow location to sort doctors by distance.");
@@ -74,7 +77,8 @@ export default function PatientDoctors() {
         {ranked.map(({ d, profile, pin, km }) => {
           const next = openSlots(d.id, state, 8).slice(0, 3);
           const stars = averageRating(state.reviews ?? [], d.id);
-          const pricing = doctorPricing(d.id, { consultationFee: profile?.consultationFee, pricing: profile?.pricing });
+          const services = profile ? bookableServices(profile) : [];
+          const from = lowestServicePrice(services);
           return (
             <article key={d.id} className="card p-5">
               <div className="flex gap-3">
@@ -86,9 +90,8 @@ export default function PatientDoctors() {
                   </h2>
                   <p className="text-muted">{profile?.specialty ?? "General physiotherapy"}</p>
                   {km != null && <p className="chip mt-2">{formatDistanceKm(km)}</p>}
-                  <p className="mt-2 text-sm font-medium">
-                    Online {formatInr(pricing.onlineFee)} · Clinic {formatInr(pricing.offlineFee)}
-                  </p>
+                  <p className="mt-2 text-lg font-semibold">{from != null ? t("fromPrice", { price: formatInr(from) }) : t("feesLater")}</p>
+                  <p className="text-sm text-muted">{t("treatmentCount", { count: services.length })}</p>
                   {stars.count > 0 && (
                     <p className="text-sm text-muted">
                       {stars.avg} / 5 · {stars.count} review{stars.count === 1 ? "" : "s"}

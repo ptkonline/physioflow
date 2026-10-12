@@ -1,11 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import {
-  getFirestore,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  type Firestore,
-} from "firebase/firestore";
+import { getFirestore, initializeFirestore, memoryLocalCache, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { isFirebaseConfigured } from "./firebase-config";
 
@@ -32,18 +26,22 @@ export function getFirebase() {
   if (!app) {
     app = getApps()[0] ?? initializeApp(config());
     try {
+      // Memory cache only. Multi-tab IndexedDB persistence can leave the first
+      // profile write pending forever, which keeps doctor signup on "Please wait…".
       db = initializeFirestore(app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+        localCache: memoryLocalCache(),
+        experimentalAutoDetectLongPolling: true,
       });
     } catch (err) {
-      // Already initialized (HMR) or unsupported environment — fall back.
       if (!persistenceWarned && process.env.NODE_ENV === "development") {
         persistenceWarned = true;
-        console.debug("[firebase] persistent cache unavailable", err);
+        console.debug("[firebase] memory cache unavailable", err);
       }
       db = getFirestore(app);
     }
     storage = getStorage(app);
+    storage.maxUploadRetryTime = 12_000;
+    storage.maxOperationRetryTime = 12_000;
   }
   return { app, db: db!, storage: storage! };
 }

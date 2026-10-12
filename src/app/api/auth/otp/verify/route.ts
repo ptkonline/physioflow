@@ -1,8 +1,15 @@
 import { digestOtp } from "@/lib/server/otp-digest";
+import { isAuthOtpEnabled, isPhoneOtpEnabled } from "@/lib/server/otp-policy";
 import { unsignJson } from "@/lib/server/signed-json";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
+  if (!isAuthOtpEnabled() && !isPhoneOtpEnabled()) {
+    return Response.json(
+      { error: "OTP is turned off. Create an account with email and password." },
+      { status: 404 },
+    );
+  }
   let body: { email?: string; code?: string; challengeToken?: string };
   try {
     body = (await request.json()) as typeof body;
